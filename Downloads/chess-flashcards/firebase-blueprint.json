@@ -1,0 +1,28 @@
+{
+  "collections": {
+    "decks": {
+      "id": "string",
+      "name": "string",
+      "description": "string",
+      "createdAt": "number",
+      "userId": "string"
+    },
+    "cards": {
+      "id": "string",
+      "deckId": "string",
+      "title": "string",
+      "imageUrl": "string",
+      "sideToMove": "string",
+      "difficulty": "string",
+      "tacticalThemes": "array",
+      "frontText": "string",
+      "backText": "string",
+      "additionalNotes": "string",
+      "createdAt": "number",
+      "reviewCount": "number",
+      "lastReviewedAt": "number",
+      "mastered": "boolean",
+      "userId": "string"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Chess Flashcards",
+  "description": "Create, analyze, and practice interactive chess flashcards by uploading board positions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
