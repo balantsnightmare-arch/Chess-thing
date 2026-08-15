@@ -7,6 +7,11 @@ export const MAX_IMAGE_DIMENSION = 900;
 /** Images already smaller than this are stored untouched. */
 const SKIP_RECOMPRESS_BYTES = 120 * 1024;
 
+/** Wrap a plain string as a text item so it can reuse the prompt renderers. */
+export function makeTextItem(content: string, id = "synthetic"): CardItem {
+  return { id, kind: "text", content };
+}
+
 export function createId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).substring(2, 10)}${Date.now().toString(36)}`;
 }

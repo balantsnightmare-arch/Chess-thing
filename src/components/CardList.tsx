@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { getCardItems, getCardTitle, getPrimaryImage, getPrimaryText, pickRandomIndex } from "../lib/cards";
+import { getCardItems, getCardTitle, getPrimaryImage, getPrimaryText, makeTextItem, pickRandomIndex } from "../lib/cards";
 import { PromptItemRow, PromptItemView } from "./PromptItemView";
 import {
   Plus,
@@ -17,7 +17,8 @@ import {
   Shuffle,
   Type,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ArrowLeftRight
 } from "lucide-react";
 
 interface CardListProps {
@@ -29,6 +30,9 @@ interface CardListProps {
   onDeleteCard: (cardId: string) => void;
   onToggleMastered: (cardId: string) => void;
   onEditCard: (card: ChessCard) => void;
+  /** Study the deck back-to-front: the answer becomes the prompt. */
+  isSwapped: boolean;
+  onToggleSwap: () => void;
 }
 
 export default function CardList({
@@ -40,6 +44,8 @@ export default function CardList({
   onDeleteCard,
   onToggleMastered,
   onEditCard,
+  isSwapped,
+  onToggleSwap,
 }: CardListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMastered, setFilterMastered] = useState<"All" | "Mastered" | "Review">("All");
@@ -62,6 +68,22 @@ export default function CardList({
     previewItems.length > 0 ? Math.min(previewPromptIndex, previewItems.length - 1) : 0;
   const drawnItem = previewItems[safePreviewIndex];
   const otherItems = previewItems.filter((_, idx) => idx !== safePreviewIndex);
+
+  /*
+   * Normal: front is one drawn prompt + the question; back is the remaining
+   * prompts + the answer.
+   * Swapped: front is the answer, and every prompt plus the question moves to
+   * the back, so you recall the prompt from the answer instead.
+   */
+  const frontItem = isSwapped
+    ? previewCard && previewCard.backText.trim()
+      ? makeTextItem(previewCard.backText, "swapped-answer")
+      : undefined
+    : drawnItem;
+  const backItems = isSwapped ? previewItems : otherItems;
+  const backLabel = isSwapped ? "The prompt" : "Rest of this card";
+  const backMainText = isSwapped ? previewCard?.frontText ?? "" : previewCard?.backText ?? "";
+  const backMainLabel = isSwapped ? "Question" : "Answer";
 
   const handleOpenPreview = (card: ChessCard) => {
     setPreviewCardId(card.id);
@@ -170,6 +192,23 @@ export default function CardList({
           >
             <Plus className="w-4 h-4" />
             <span>Add Card</span>
+          </button>
+
+          <button
+            onClick={onToggleSwap}
+            className={`text-xs sm:text-sm font-semibold py-2.5 px-4 rounded-xl transition flex items-center space-x-1.5 border cursor-pointer ${
+              isSwapped
+                ? "bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+                : "bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200/60"
+            }`}
+            title={
+              isSwapped
+                ? "Currently showing answers first. Click to go back to normal."
+                : "Show the answer first and recall the prompt instead"
+            }
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            <span>{isSwapped ? "Sides Swapped" : "Swap Sides"}</span>
           </button>
 
           <button
@@ -399,7 +438,7 @@ export default function CardList({
                     </span>
                   ) : null}
 
-                  {previewItems.length > 1 && (
+                  {!isSwapped && previewItems.length > 1 && (
                     <span className="bg-amber-50 border border-amber-200/70 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
                       <Layers className="w-2.5 h-2.5" /> Prompt {safePreviewIndex + 1} of {previewItems.length}
                     </span>
@@ -419,23 +458,23 @@ export default function CardList({
                   <div className="absolute inset-0 w-full h-full bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between backface-hidden shadow-md hover:shadow-lg hover:border-slate-300 transition-all">
                     {/* Front Header */}
                     <div className="flex justify-between items-center text-xs font-semibold text-slate-400 pb-2 border-b border-slate-100">
-                      <span>FRONT SIDE (Question)</span>
+                      <span>{isSwapped ? "FRONT SIDE (Answer)" : "FRONT SIDE (Question)"}</span>
                       <span className="text-amber-500 font-bold">Click to Flip</span>
                     </div>
 
                     {/* Front Body (randomly drawn prompt & question) */}
                     <div className="my-auto space-y-3">
                       <div className="max-w-[200px] mx-auto w-full">
-                        {drawnItem ? (
-                          <PromptItemView item={drawnItem} alt={getCardTitle(previewCard)} compact />
+                        {frontItem ? (
+                          <PromptItemView item={frontItem} alt={getCardTitle(previewCard)} compact />
                         ) : (
                           <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-[11px] text-slate-400 text-center p-4">
-                            This card has no prompts yet.
+                            {isSwapped ? "This card has no answer to show." : "This card has no prompts yet."}
                           </div>
                         )}
                       </div>
 
-                      {previewItems.length > 1 && (
+                      {!isSwapped && previewItems.length > 1 && (
                         <div className="flex justify-center">
                           <button
                             type="button"
@@ -451,8 +490,8 @@ export default function CardList({
                         </div>
                       )}
 
-                      {/* Prompt / Question */}
-                      {previewCard.frontText && (
+                      {/* Prompt / Question (moves to the back when swapped) */}
+                      {!isSwapped && previewCard.frontText && (
                         <div className="text-center bg-slate-50 border border-slate-100/80 rounded-xl p-3">
                           <p className="text-slate-800 text-xs sm:text-sm font-medium font-sans whitespace-pre-line leading-relaxed">
                             {previewCard.frontText}
@@ -463,7 +502,7 @@ export default function CardList({
 
                     {/* Front Footer */}
                     <div className="text-center text-[10px] text-slate-400 border-t border-slate-50 pt-2 font-mono">
-                      ▲ Drawn at random • Flip to see the rest
+                      {isSwapped ? "▲ Answer first • Flip for the prompt" : "▲ Drawn at random • Flip to see the rest"}
                     </div>
                   </div>
 
@@ -471,34 +510,34 @@ export default function CardList({
                   <div className="absolute inset-0 w-full h-full bg-slate-950 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between backface-hidden shadow-xl rotate-y-180 overflow-hidden">
                     {/* Back Header */}
                     <div className="flex justify-between items-center text-xs font-semibold text-amber-400 pb-2 border-b border-slate-800">
-                      <span>BACK SIDE (Solution)</span>
+                      <span>{isSwapped ? "BACK SIDE (Prompt)" : "BACK SIDE (Answer)"}</span>
                       <span className="text-amber-500 font-bold">Click to Flip</span>
                     </div>
 
                     {/* Back Body (remaining prompts, solution & coaching notes) */}
                     <div className="my-auto space-y-3 overflow-y-auto max-h-[220px] no-scrollbar pr-1">
                       {/* Everything that was not drawn for the front */}
-                      {otherItems.length > 0 && (
+                      {backItems.length > 0 && (
                         <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
                           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                            <Layers className="w-3 h-3 text-amber-400" /> Rest of this card ({otherItems.length})
+                            <Layers className="w-3 h-3 text-amber-400" /> {backLabel} ({backItems.length})
                           </span>
                           <div className="space-y-1.5">
-                            {otherItems.map((item, idx) => (
+                            {backItems.map((item, idx) => (
                               <PromptItemRow key={item.id} item={item} index={idx + 1} dark />
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Solution Box */}
-                      {previewCard.backText && (
+                      {/* Answer, or the question when the sides are swapped */}
+                      {backMainText && (
                         <div className="bg-amber-400/5 border border-amber-400/10 rounded-xl p-3">
                           <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest block mb-1">
-                            Answer
+                            {backMainLabel}
                           </span>
                           <p className="text-slate-100 text-xs sm:text-sm font-semibold font-sans whitespace-pre-line leading-relaxed">
-                            {previewCard.backText}
+                            {backMainText}
                           </p>
                         </div>
                       )}

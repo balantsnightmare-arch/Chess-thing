@@ -44,6 +44,17 @@ import { createId } from "./lib/cards";
 import { Loader2, Sparkles, AlertTriangle, CloudUpload, Check } from "lucide-react";
 
 const LOCAL_USER_KEY = "chess_local_user";
+const SWAPPED_DECKS_KEY = "chess_swapped_decks";
+
+/** Which decks are being studied back-to-front. */
+function readSwappedDecks(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(SWAPPED_DECKS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Which slice of on-device storage a session owns. Guest work and each device
@@ -90,6 +101,7 @@ export default function App() {
   const [pendingLocalData, setPendingLocalData] = useState<
     { mode: "upload" | "claim"; decks: ChessDeck[]; cards: ChessCard[] } | null
   >(null);
+  const [swappedDecks, setSwappedDecks] = useState<Record<string, boolean>>(readSwappedDecks);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationDone, setMigrationDone] = useState<string | null>(null);
 
@@ -449,6 +461,19 @@ export default function App() {
       setPendingLocalData(null);
       await loadData(user);
     }
+  };
+
+  const handleToggleSwapSides = (deckId: string) => {
+    setSwappedDecks((prev) => {
+      const next = { ...prev, [deckId]: !prev[deckId] };
+      if (!next[deckId]) delete next[deckId];
+      try {
+        localStorage.setItem(SWAPPED_DECKS_KEY, JSON.stringify(next));
+      } catch {
+        /* Storage unavailable; the toggle just will not persist. */
+      }
+      return next;
+    });
   };
 
   // Handlers for Decks
@@ -814,6 +839,8 @@ export default function App() {
                   setEditingCard(card);
                   setActiveView("creator");
                 }}
+                isSwapped={!!swappedDecks[selectedDeck.id]}
+                onToggleSwap={() => handleToggleSwapSides(selectedDeck.id)}
               />
             )}
 
@@ -835,6 +862,7 @@ export default function App() {
                 cards={deckCards}
                 onClose={() => setActiveView("deck-view")}
                 onUpdateCardProgress={handleUpdateCardProgress}
+                isSwapped={!!swappedDecks[selectedDeck.id]}
               />
             )}
           </div>

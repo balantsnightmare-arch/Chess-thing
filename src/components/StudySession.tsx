@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { getCardItems, getCardTitle, pickRandomIndex } from "../lib/cards";
+import { getCardItems, getCardTitle, makeTextItem, pickRandomIndex } from "../lib/cards";
 import { PromptItemRow, PromptItemView } from "./PromptItemView";
 import {
   X,
@@ -25,6 +25,8 @@ interface StudySessionProps {
   cards: ChessCard[];
   onClose: () => void;
   onUpdateCardProgress: (cardId: string, mastered: boolean) => void;
+  /** Study the deck back-to-front: the answer becomes the prompt. */
+  isSwapped: boolean;
 }
 
 export default function StudySession({
@@ -32,6 +34,7 @@ export default function StudySession({
   cards,
   onClose,
   onUpdateCardProgress,
+  isSwapped,
 }: StudySessionProps) {
   // The session is stored as an ordered list of card ids, not card objects.
   // Grading a card reloads the deck from storage, which used to hand this
@@ -92,6 +95,20 @@ export default function StudySession({
   const safePromptIndex = promptItems.length > 0 ? Math.min(promptIndex, promptItems.length - 1) : 0;
   const drawnItem = promptItems[safePromptIndex];
   const otherItems = promptItems.filter((_, idx) => idx !== safePromptIndex);
+
+  /*
+   * Swapped decks show the answer first; every prompt and the question move to
+   * the back, so the card is recalled in reverse.
+   */
+  const frontItem = isSwapped
+    ? currentCard && currentCard.backText.trim()
+      ? makeTextItem(currentCard.backText, "swapped-answer")
+      : undefined
+    : drawnItem;
+  const backItems = isSwapped ? promptItems : otherItems;
+  const backLabel = isSwapped ? "The prompt" : "Rest of this card";
+  const backMainText = isSwapped ? currentCard?.frontText ?? "" : currentCard?.backText ?? "";
+  const backMainLabel = isSwapped ? "Question" : "Answer";
 
   const handleShufflePrompt = () => {
     setPromptIndex((prev) => pickRandomIndex(promptItems.length, prev));
@@ -282,7 +299,7 @@ export default function StudySession({
 
                   <div className="text-slate-400 flex items-center space-x-1 text-xs">
                     <RotateCw className="w-4 h-4 animate-spin-slow text-amber-500" />
-                    <span>Click card to reveal solution</span>
+                    <span>Click card to reveal the other side</span>
                   </div>
                 </div>
 
@@ -291,16 +308,16 @@ export default function StudySession({
                   {/* Randomly drawn prompt: a picture or a phrase */}
                   <div className="w-full flex flex-col items-center gap-2">
                     <div className="w-full max-w-[280px] sm:max-w-[320px]">
-                      {drawnItem ? (
-                        <PromptItemView item={drawnItem} alt={getCardTitle(currentCard)} />
+                      {frontItem ? (
+                        <PromptItemView item={frontItem} alt={getCardTitle(currentCard)} />
                       ) : (
                         <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-xs text-slate-400 text-center p-4">
-                          This card has no prompts yet.
+                          {isSwapped ? "This card has no answer to show." : "This card has no prompts yet."}
                         </div>
                       )}
                     </div>
 
-                    {promptItems.length > 1 && (
+                    {!isSwapped && promptItems.length > 1 && (
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                           <Layers className="w-3 h-3" />
@@ -329,10 +346,12 @@ export default function StudySession({
 
                     <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 shadow-inner">
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        Question / Study Prompt
+                        {isSwapped ? "Recall the prompt" : "Question / Study Prompt"}
                       </div>
                       <p className="text-slate-700 text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
-                        {currentCard.frontText || "What is the answer?"}
+                        {isSwapped
+                          ? "What was on the front of this card?"
+                          : currentCard.frontText || "What is the answer?"}
                       </p>
                     </div>
 
@@ -367,7 +386,9 @@ export default function StudySession({
                 <div className="flex justify-between items-center pb-3 border-b border-slate-800/80 relative z-10">
                   <div className="flex items-center space-x-2 text-amber-400">
                     <Zap className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Answer</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      {isSwapped ? "The prompt" : "Answer"}
+                    </span>
                   </div>
 
                   <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-medium">
@@ -378,28 +399,28 @@ export default function StudySession({
                 {/* Back Body (Scrollable solution, remaining prompts & notes) */}
                 <div className="my-auto space-y-4 max-h-[300px] sm:max-h-[340px] overflow-y-auto pr-1 no-scrollbar relative z-10">
                   {/* The prompts that were not drawn for the front */}
-                  {otherItems.length > 0 && (
+                  {backItems.length > 0 && (
                     <div className="bg-slate-900/60 border border-slate-800/70 rounded-2xl p-4">
                       <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
                         <Layers className="w-3.5 h-3.5 text-amber-400" />
-                        Rest of this card ({otherItems.length})
+                        {backLabel} ({backItems.length})
                       </h5>
                       <div className="space-y-2">
-                        {otherItems.map((item, idx) => (
+                        {backItems.map((item, idx) => (
                           <PromptItemRow key={item.id} item={item} index={idx + 1} dark />
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Solution Box */}
-                  {currentCard.backText && (
+                  {/* Answer, or the question when the sides are swapped */}
+                  {backMainText && (
                     <div className="bg-amber-400/5 border border-amber-400/15 rounded-2xl p-4">
                       <h5 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> Answer
+                        <CheckCircle className="w-3.5 h-3.5" /> {backMainLabel}
                       </h5>
                       <p className="text-slate-100 font-semibold text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
-                        {currentCard.backText}
+                        {backMainText}
                       </p>
                     </div>
                   )}
