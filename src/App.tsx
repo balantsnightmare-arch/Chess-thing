@@ -74,6 +74,9 @@ function readLocalSession(): AuthUser | null {
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  // Set when the user explicitly asks to leave a device-only account. While
+  // this is on, sign-up must not quietly create another device-only account.
+  const [cloudUpgrade, setCloudUpgrade] = useState<{ email: string; displayName: string } | null>(null);
   const [decks, setDecks] = useState<ChessDeck[]>([]);
   const [cards, setCards] = useState<ChessCard[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
@@ -217,7 +220,20 @@ export default function App() {
       setIsLoading(true);
       await signUpWithEmailAndPassword(email, password, displayName);
     } catch (err: any) {
-      console.warn("Firebase sign up failed, trying local fallback:", err);
+      console.warn("Firebase sign up failed:", err);
+
+      // The user asked for a cloud account on purpose. Handing them another
+      // device-only account would look like it worked while changing nothing.
+      if (cloudUpgrade) {
+        setIsLoading(false);
+        if (err.code === "auth/operation-not-allowed") {
+          throw new Error(
+            "Cloud accounts are still switched off for this project. Enable Email/Password sign-in in the Firebase console (Authentication -> Sign-in method), then try again."
+          );
+        }
+        throw err;
+      }
+
       // Check if it's a domain restriction, operation-not-allowed, or offline
       if (
         err.code === "auth/operation-not-allowed" ||
@@ -369,6 +385,29 @@ export default function App() {
       setErrorMessage(failureMessage);
       return false;
     }
+  };
+
+  /**
+   * Leave a device-only account for a real one. The account's decks are handed
+   * back to the guest pool first, so the normal "copy into my account" offer
+   * picks them up as soon as the cloud sign-up succeeds.
+   */
+  const handleSwitchToCloudAccount = async () => {
+    if (!user?.isLocal) return;
+    const { uid, email, displayName } = user;
+
+    await runWrite(
+      () => claimDeviceData(uid, GUEST_OWNER).then(() => undefined),
+      "Could not prepare your decks for the move. Please try again."
+    );
+
+    localStorage.removeItem(LOCAL_USER_KEY);
+    setCloudUpgrade({ email: email ?? "", displayName: displayName ?? "" });
+    setUser(null);
+    setActiveView("decks");
+    setSelectedDeckId(null);
+    setIsAuthModalOpen(true);
+    await loadData(null);
   };
 
   /**
@@ -695,12 +734,22 @@ export default function App() {
                     or any other device. Enable Email/Password sign-in in the Firebase console to turn on account sync.
                   </p>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="text-slate-400 hover:text-slate-600 font-semibold px-2 py-1 hover:bg-slate-100/50 rounded transition cursor-pointer"
-                >
-                  Logout
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleSwitchToCloudAccount}
+                    className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                    title="Create a real account and copy these decks into it"
+                  >
+                    <CloudUpload className="w-3.5 h-3.5" />
+                    <span>Switch to cloud account</span>
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="text-slate-400 hover:text-slate-600 font-semibold px-2 py-1 hover:bg-slate-100/50 rounded transition cursor-pointer"
+                  >
+                    Logout
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="mb-6 bg-emerald-50/60 border border-emerald-100/85 text-emerald-900 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs shadow-sm">
@@ -792,7 +841,14 @@ export default function App() {
 
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setCloudUpgrade(null);
+        }}
+        initialEmail={cloudUpgrade?.email ?? ""}
+        initialDisplayName={cloudUpgrade?.displayName ?? ""}
+        startOnRegister={cloudUpgrade !== null}
+        cloudUpgradeNotice={cloudUpgrade !== null}
         onSignUp={handleSignUp}
         onSignIn={handleSignIn}
       />

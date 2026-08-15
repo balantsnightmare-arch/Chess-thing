@@ -1,21 +1,48 @@
-import React, { useState } from "react";
-import { Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, X, Sparkles } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, X, Sparkles, CloudUpload } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSignUp: (email: string, password: string, displayName: string) => Promise<void>;
   onSignIn: (email: string, password: string) => Promise<void>;
+  /** Prefilled address when converting an existing device-only account. */
+  initialEmail?: string;
+  initialDisplayName?: string;
+  /** Open straight on the Register tab. */
+  startOnRegister?: boolean;
+  /** Explain that this sign-up is specifically to move off a device-only account. */
+  cloudUpgradeNotice?: boolean;
 }
 
-export default function AuthModal({ isOpen, onClose, onSignUp, onSignIn }: AuthModalProps) {
-  const [isSignUpTab, setIsSignUpTab] = useState(false);
-  const [email, setEmail] = useState("");
+export default function AuthModal({
+  isOpen,
+  onClose,
+  onSignUp,
+  onSignIn,
+  initialEmail = "",
+  initialDisplayName = "",
+  startOnRegister = false,
+  cloudUpgradeNotice = false,
+}: AuthModalProps) {
+  const [isSignUpTab, setIsSignUpTab] = useState(startOnRegister);
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(initialDisplayName);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Re-apply the incoming defaults each time the dialog is opened, since the
+  // component keeps its state between openings.
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsSignUpTab(startOnRegister);
+    setEmail(initialEmail);
+    setDisplayName(initialDisplayName);
+    setPassword("");
+    setErrorMessage(null);
+  }, [isOpen, startOnRegister, initialEmail, initialDisplayName]);
 
   if (!isOpen) return null;
 
@@ -141,6 +168,16 @@ export default function AuthModal({ isOpen, onClose, onSignUp, onSignIn }: AuthM
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-4">
+          {cloudUpgradeNotice && (
+            <div className="flex gap-2.5 items-start bg-sky-50 border border-sky-200 text-sky-950 p-3.5 rounded-2xl text-xs leading-relaxed">
+              <CloudUpload className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+              <p>
+                Registering here creates a <strong>real cloud account</strong>. Your existing decks are kept on this
+                device and you will be offered to copy them up once you are signed in.
+              </p>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="flex gap-2.5 items-start bg-rose-50 border border-rose-100 text-rose-900 p-3.5 rounded-2xl text-xs font-semibold leading-relaxed animate-shake">
               <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
