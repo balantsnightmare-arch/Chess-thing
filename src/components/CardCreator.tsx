@@ -194,21 +194,27 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
     e.preventDefault();
     setFormError("");
 
-    if (items.length === 0) {
+    // A phrase still sitting in the input counts: saving should not silently
+    // discard something the user has typed just because they did not click Add.
+    const pendingPhrase = phraseInput.trim();
+    const effectiveItems: CardItem[] = pendingPhrase
+      ? [...items, { id: createId("item"), kind: "text", content: pendingPhrase }]
+      : items;
+
+    if (effectiveItems.length === 0) {
       setFormError("Add at least one picture or phrase to this card.");
       return;
     }
-    if (!title.trim()) {
-      setFormError("Please give the card a title.");
-      return;
-    }
+
+    setItems(effectiveItems);
+    setPhraseInput("");
 
     const draft = {
       deckId,
       title: title.trim(),
       // Kept in sync with the first image so list thumbnails and AI analysis work.
       imageUrl: firstImage,
-      items,
+      items: effectiveItems,
       sideToMove: sideToMove || undefined,
       tacticalThemes: tags,
       frontText: frontText.trim(),
@@ -465,11 +471,10 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           {/* Title */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Card Title *
+              Card Title (optional)
             </label>
             <input
               type="text"
-              required
               placeholder="e.g. Photosynthesis, or Spanish: to run"
               value={title}
               onChange={(e) => setTitle(e.target.value)}

@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { getCardItems, getPrimaryImage, getPrimaryText, pickRandomIndex } from "../lib/cards";
+import { getCardItems, getCardTitle, getPrimaryImage, getPrimaryText, pickRandomIndex } from "../lib/cards";
 import { PromptItemRow, PromptItemView } from "./PromptItemView";
 import {
   Plus,
@@ -15,7 +15,9 @@ import {
   GraduationCap,
   Layers,
   Shuffle,
-  Type
+  Type,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface CardListProps {
@@ -80,7 +82,7 @@ export default function CardList({
   const filteredCards = cards.filter((card) => {
     const needle = searchQuery.toLowerCase();
     const haystacks = [
-      card.title,
+      getCardTitle(card),
       card.frontText,
       card.backText,
       ...getCardItems(card)
@@ -99,6 +101,39 @@ export default function CardList({
   });
 
   const masteredCount = cards.filter((c) => c.mastered).length;
+
+  // Step through the deck without closing the preview.
+  const previewIndex = previewCardId
+    ? filteredCards.findIndex((c) => c.id === previewCardId)
+    : -1;
+
+  const goToOffset = (offset: number) => {
+    const next = filteredCards[previewIndex + offset];
+    if (!next) return;
+    setPreviewCardId(next.id);
+    setIsPreviewFlipped(false);
+    // Each card gets its own fresh draw.
+    setPreviewPromptIndex(pickRandomIndex(getCardItems(next).length));
+  };
+
+  // Arrow keys move between cards, Escape closes, while the preview is open.
+  const filteredIds = filteredCards.map((c) => c.id).join("|");
+  useEffect(() => {
+    if (!previewCardId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToOffset(1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToOffset(-1);
+      } else if (e.key === "Escape") {
+        handleClosePreview();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewCardId, filteredIds]);
 
   return (
     <div className="space-y-6">
@@ -198,7 +233,7 @@ export default function CardList({
                     <div className="w-20 h-20 bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
                       <img
                         src={thumbnail}
-                        alt={card.title}
+                        alt={getCardTitle(card)}
                         className="w-full h-full object-contain"
                       />
                     </div>
@@ -226,7 +261,7 @@ export default function CardList({
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="font-display font-bold text-sm sm:text-base text-slate-900 truncate group-hover:text-amber-800 transition-colors">
-                      {card.title}
+                      {getCardTitle(card)}
                     </h4>
 
                     {/* Mastered / Need Review Status Checkmark (Interactive Toggle) */}
@@ -290,7 +325,7 @@ export default function CardList({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`Are you sure you want to delete the card "${card.title}"?`)) {
+                    if (confirm(`Are you sure you want to delete the card "${getCardTitle(card)}"?`)) {
                       onDeleteCard(card.id);
                     }
                   }}
@@ -340,7 +375,7 @@ export default function CardList({
                   Interactive Flashcard Preview
                 </span>
                 <h3 className="font-display font-extrabold text-xl text-slate-900 leading-tight pr-8">
-                  {previewCard.title}
+                  {getCardTitle(previewCard)}
                 </h3>
 
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -392,7 +427,7 @@ export default function CardList({
                     <div className="my-auto space-y-3">
                       <div className="max-w-[200px] mx-auto w-full">
                         {drawnItem ? (
-                          <PromptItemView item={drawnItem} alt={previewCard.title} compact />
+                          <PromptItemView item={drawnItem} alt={getCardTitle(previewCard)} compact />
                         ) : (
                           <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-[11px] text-slate-400 text-center p-4">
                             This card has no prompts yet.
@@ -505,6 +540,33 @@ export default function CardList({
 
               {/* Quick Actions */}
               <div className="flex flex-col gap-3 pt-3 border-t border-slate-100">
+                {/* Move through the deck without closing */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => goToOffset(-1)}
+                    disabled={previewIndex <= 0}
+                    className="flex-1 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 text-xs sm:text-sm font-bold py-2.5 rounded-xl border border-slate-200 transition cursor-pointer flex items-center justify-center gap-1"
+                    title="Previous card (left arrow)"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Prev</span>
+                  </button>
+
+                  <span className="text-[11px] font-mono font-semibold text-slate-400 px-2 shrink-0">
+                    {previewIndex + 1} / {filteredCards.length}
+                  </span>
+
+                  <button
+                    onClick={() => goToOffset(1)}
+                    disabled={previewIndex < 0 || previewIndex >= filteredCards.length - 1}
+                    className="flex-1 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 text-xs sm:text-sm font-bold py-2.5 rounded-xl border border-slate-200 transition cursor-pointer flex items-center justify-center gap-1"
+                    title="Next card (right arrow)"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
                 {/* Large Close Preview Button */}
                 <button
                   onClick={handleClosePreview}
@@ -541,7 +603,7 @@ export default function CardList({
 
                   <button
                     onClick={() => {
-                      if (confirm(`Are you sure you want to delete the card "${previewCard.title}"?`)) {
+                      if (confirm(`Are you sure you want to delete the card "${getCardTitle(previewCard)}"?`)) {
                         onDeleteCard(previewCard.id);
                         handleClosePreview();
                       }

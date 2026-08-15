@@ -34,6 +34,19 @@ export function getPrimaryImage(card: CardLike): string {
   return firstImage ? firstImage.content : "";
 }
 
+/**
+ * What to show as the card's heading. Titles are optional, so fall back to the
+ * card's first phrase and finally to a neutral placeholder, rather than
+ * rendering an empty heading.
+ */
+export function getCardTitle(card: CardLike & { title?: string }): string {
+  const title = (card.title ?? "").trim();
+  if (title) return title;
+  const firstText = getPrimaryText(card).trim();
+  if (firstText) return firstText.length > 60 ? `${firstText.slice(0, 57)}...` : firstText;
+  return "Untitled card";
+}
+
 /** First phrase on the card, used as a thumbnail stand-in for text-only cards. */
 export function getPrimaryText(card: CardLike): string {
   const firstText = getCardItems(card).find((item) => item.kind === "text");

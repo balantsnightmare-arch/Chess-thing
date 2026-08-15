@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { getCardItems, pickRandomIndex } from "../lib/cards";
+import { getCardItems, getCardTitle, pickRandomIndex } from "../lib/cards";
 import { PromptItemRow, PromptItemView } from "./PromptItemView";
 import {
   X,
@@ -292,7 +292,7 @@ export default function StudySession({
                   <div className="w-full flex flex-col items-center gap-2">
                     <div className="w-full max-w-[280px] sm:max-w-[320px]">
                       {drawnItem ? (
-                        <PromptItemView item={drawnItem} alt={currentCard.title} />
+                        <PromptItemView item={drawnItem} alt={getCardTitle(currentCard)} />
                       ) : (
                         <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-xs text-slate-400 text-center p-4">
                           This card has no prompts yet.
@@ -324,7 +324,7 @@ export default function StudySession({
                   {/* Question Prompt */}
                   <div className="space-y-4">
                     <h4 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 leading-tight">
-                      {currentCard.title}
+                      {getCardTitle(currentCard)}
                     </h4>
 
                     <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 shadow-inner">
