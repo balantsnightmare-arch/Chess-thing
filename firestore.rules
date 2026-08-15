@@ -1,10 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null && 
-        (resource == null || resource.data.userId == request.auth.uid) && 
-        (request.resource == null || request.resource.data.userId == request.auth.uid);
+
+    /*
+     * Rules are written per collection rather than under a single
+     * `match /{document=**}` recursive wildcard.
+     *
+     * A recursive wildcard combined with a `resource.data` condition denies
+     * collection queries: the wildcard can match documents at any depth, so
+     * the rules engine cannot show that every document a query might return
+     * satisfies the condition, and it rejects the whole `list` operation.
+     * Single-document reads and writes still pass, which is why saving a card
+     * worked while loading the deck list failed with permission-denied.
+     */
+
+    // Per-account settings, keyed by the signer's uid (e.g. demoSeeded).
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /decks/{deckId} {
+      // Covers both get and list. Queries must be filtered by userId, which
+      // getDecksFromFirestore always does.
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      allow create, update: if request.auth != null
+                            && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+    }
+
+    match /cards/{cardId} {
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      allow create, update: if request.auth != null
+                            && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
     }
   }
 }

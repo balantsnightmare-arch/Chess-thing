@@ -12,6 +12,7 @@
       "deckId": "string",
       "title": "string",
       "imageUrl": "string",
+      "items": "array",
       "sideToMove": "string",
       "difficulty": "string",
       "tacticalThemes": "array",

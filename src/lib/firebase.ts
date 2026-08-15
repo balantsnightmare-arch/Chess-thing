@@ -4,26 +4,29 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut,
-  onAuthStateChanged,
-  User,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  setPersistence,
+  browserLocalPersistence
 } from "firebase/auth";
 import { 
   getFirestore, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection, 
   doc, 
+  getDoc,
   getDocs, 
   setDoc, 
   deleteDoc, 
   query, 
   where,
-  getDoc,
   writeBatch
 } from "firebase/firestore";
 import { ChessCard, ChessDeck } from "../types";
-import { generateChessBoardSvg } from "./db";
+import { createDemoCards, createDemoDeck } from "./demoData";
 
 // Support custom configuration via env variables or fallback to defaults
 const firebaseConfig = {
@@ -42,9 +45,37 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Initialize Firestore with custom Database ID
+// Keep the session across app restarts so a phone stays signed in.
+// (This is the browser default, but it is stated explicitly because the whole
+// account-sync model depends on it.)
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn("Could not set auth persistence:", err);
+});
+
+// Initialize Firestore with custom Database ID.
+// A persistent local cache lets the app keep working on a phone with patchy
+// signal: reads are served from cache and writes are queued until reconnect.
 const dbId = import.meta.env.VITE_FIREBASE_DATABASE_ID || "ai-studio-chessflashcards-ca8f0395-c891-4fed-80a7-33c605882906";
-export const db = getFirestore(app, dbId);
+
+function createDb() {
+  try {
+    return initializeFirestore(
+      app,
+      { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+      dbId
+    );
+  } catch (err: any) {
+    // Already initialised (module re-evaluated, e.g. by HMR): getFirestore
+    // hands back the existing instance, persistent cache and all.
+    if (err?.code !== "failed-precondition") {
+      // Private browsing / unsupported storage: this one really is memory-only.
+      console.warn("Firestore offline persistence unavailable, using memory cache:", err);
+    }
+    return getFirestore(app, dbId);
+  }
+}
+
+export const db = createDb();
 
 // Auth Handlers
 export async function signUpWithEmailAndPassword(email: string, password: string, displayName: string) {
@@ -147,13 +178,25 @@ export async function getCardsFromFirestore(userId: string, deckId?: string): Pr
   return cards.sort((a, b) => a.createdAt - b.createdAt);
 }
 
+/**
+ * Firestore rejects documents containing `undefined`, which optional fields
+ * such as `items` produce on cards created before multi-item support.
+ */
+function stripUndefined<T extends Record<string, unknown>>(value: T): T {
+  const clean: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (val !== undefined) clean[key] = val;
+  }
+  return clean as T;
+}
+
 // Save/Update a card in Firestore
 export async function saveCardToFirestore(card: ChessCard, userId: string): Promise<void> {
   const cardRef = doc(db, "cards", card.id);
-  await setDoc(cardRef, {
+  await setDoc(cardRef, stripUndefined({
     ...card,
     userId
-  });
+  }));
 }
 
 // Delete a card in Firestore
@@ -162,70 +205,64 @@ export async function deleteCardFromFirestore(cardId: string): Promise<void> {
   await deleteDoc(cardRef);
 }
 
-// Seed Firestore Demo Data
-export async function seedFirestoreDemoData(userId: string): Promise<void> {
-  const defaultDeck: ChessDeck = {
-    id: "default-tactics-fs",
-    name: "Mastering Tactical Themes",
-    description: "A collection of essential chess puzzles, checkmates, and tactical motifs.",
-    createdAt: Date.now(),
-  };
+/*
+ * Per-account settings live in users/{uid}. Storing them here rather than in
+ * localStorage keeps them tied to the account, so signing in on a second
+ * device does not re-seed demo data the user already dealt with elsewhere.
+ */
+interface AccountFlags {
+  demoSeeded?: boolean;
+}
 
+export async function getAccountFlags(userId: string): Promise<AccountFlags> {
+  try {
+    const snap = await getDoc(doc(db, "users", userId));
+    return snap.exists() ? (snap.data() as AccountFlags) : {};
+  } catch (err) {
+    console.warn("Could not read account settings:", err);
+    return {};
+  }
+}
+
+export async function setAccountFlags(userId: string, flags: AccountFlags): Promise<void> {
+  try {
+    // userId is required by the Firestore security rules.
+    await setDoc(doc(db, "users", userId), { userId, ...flags }, { merge: true });
+  } catch (err) {
+    console.warn("Could not save account settings:", err);
+  }
+}
+
+/**
+ * Copy decks and cards created on this device (guest or offline-only mode)
+ * into the signed-in account. Documents keep their ids, so running this twice
+ * overwrites rather than duplicating.
+ */
+export async function uploadDataToAccount(
+  decks: ChessDeck[],
+  cards: ChessCard[],
+  userId: string
+): Promise<{ decks: number; cards: number }> {
+  for (const deck of decks) {
+    await saveDeckToFirestore(deck, userId);
+  }
+  for (const card of cards) {
+    await saveCardToFirestore(card, userId);
+  }
+  return { decks: decks.length, cards: cards.length };
+}
+
+// Seed Firestore Demo Data.
+// Document ids are scoped to the user: a fixed id such as "default-tactics-fs"
+// is a single global document, so every new account used to overwrite the
+// previous account's demo deck and cards.
+export async function seedFirestoreDemoData(userId: string): Promise<void> {
+  const suffix = `-fs-${userId}`;
+  const defaultDeck = createDemoDeck(suffix);
   await saveDeckToFirestore(defaultDeck, userId);
 
-  const demoCards: ChessCard[] = [
-    {
-      id: "demo-card-1-fs",
-      deckId: "default-tactics-fs",
-      title: "The Philidor Smothered Mate",
-      imageUrl: generateChessBoardSvg("tactics"),
-      sideToMove: "White",
-      tacticalThemes: ["Smothered Mate", "Knight", "Double Check"],
-      frontText: "Look closely at the congested black king on h8. How does White deliver checkmate in 1 move?",
-      backText: "1. Nf7# (Knight to f7 checkmate)\n\nThe black king is completely surrounded ('smothered') by its own defenders (the rook on g8 and pawns on g7/h7). The knight jumps over to deliver a fatal checkmate. This is the classic Philidor mate mechanism!",
-      additionalNotes: "Always watch out for smothered mates when the enemy king is trapped in the corner. If the Rook was on f8, we would need a queen sacrifice first to force the rook onto g8.",
-      createdAt: Date.now() - 5000,
-      reviewCount: 0,
-      difficulty: "Medium",
-      lastReviewedAt: null,
-      mastered: false,
-    },
-    {
-      id: "demo-card-2-fs",
-      deckId: "default-tactics-fs",
-      title: "The Classic Back-Rank Weakness",
-      imageUrl: generateChessBoardSvg("mate"),
-      sideToMove: "White",
-      tacticalThemes: ["Back-Rank Mate", "Rook", "King Safety"],
-      frontText: "Black's king is tucked behind its pawns on the back rank. How can White exploit this setup immediately?",
-      backText: "1. Rc8# (Rook to c8 checkmate)\n\nBecause the black pawns on b7, c7, and d7 block the king from moving up to the 7th rank, the king has no escape square. White's rook delivers checkmate along the open 8th rank.",
-      additionalNotes: "Back-rank weakness is the most common tactical blunder for beginners and intermediate players alike. Always make 'luft' (air) for your king by moving a pawn (like g3/h3 or g6/h6) before entering complex endgames.",
-      createdAt: Date.now() - 4000,
-      reviewCount: 0,
-      difficulty: "Easy",
-      lastReviewedAt: null,
-      mastered: false,
-    },
-    {
-      id: "demo-card-3-fs",
-      deckId: "default-tactics-fs",
-      title: "King & Pawn Endgame: Opposing Kings",
-      imageUrl: generateChessBoardSvg("endgame"),
-      sideToMove: "White",
-      tacticalThemes: ["Opposition", "Endgame", "Pawn Promotion"],
-      frontText: "White to move. Should White play 1. Kd5 or does Black have defensive resources? How does 'Opposition' decide this game?",
-      backText: "1. Kd5!\n\nBy playing Kd5, White takes direct 'Opposition' against the black king. Since Black must move their king, they will have to step aside (e.g. to d6 or f6), allowing White's king to advance and shepherd the f5 pawn safely to promotion.",
-      additionalNotes: "Opposition means having kings on the same file, rank, or diagonal with an odd number of squares between them. The player who does NOT have to move holds the opposition and can break through.",
-      createdAt: Date.now() - 3000,
-      reviewCount: 0,
-      difficulty: "Hard",
-      lastReviewedAt: null,
-      mastered: false,
-    },
-  ];
-
+  const demoCards = createDemoCards(defaultDeck.id, suffix);
   for (const card of demoCards) {
     await saveCardToFirestore(card, userId);
   }
 }
-

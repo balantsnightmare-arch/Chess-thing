@@ -1,23 +1,79 @@
-import React, { useState } from "react";
-import { Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, X, Sparkles } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, X, Sparkles, CloudUpload } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSignUp: (email: string, password: string, displayName: string) => Promise<void>;
   onSignIn: (email: string, password: string) => Promise<void>;
+  /** Sign in through the Google popup. Omitted if the provider is unused. */
+  onGoogleSignIn?: () => Promise<void>;
+  /** Prefilled address when converting an existing device-only account. */
+  initialEmail?: string;
+  initialDisplayName?: string;
+  /** Open straight on the Register tab. */
+  startOnRegister?: boolean;
+  /** Explain that this sign-up is specifically to move off a device-only account. */
+  cloudUpgradeNotice?: boolean;
 }
 
-export default function AuthModal({ isOpen, onClose, onSignUp, onSignIn }: AuthModalProps) {
-  const [isSignUpTab, setIsSignUpTab] = useState(false);
-  const [email, setEmail] = useState("");
+export default function AuthModal({
+  isOpen,
+  onClose,
+  onSignUp,
+  onSignIn,
+  onGoogleSignIn,
+  initialEmail = "",
+  initialDisplayName = "",
+  startOnRegister = false,
+  cloudUpgradeNotice = false,
+}: AuthModalProps) {
+  const [isSignUpTab, setIsSignUpTab] = useState(startOnRegister);
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(initialDisplayName);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Re-apply the incoming defaults each time the dialog is opened, since the
+  // component keeps its state between openings.
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsSignUpTab(startOnRegister);
+    setEmail(initialEmail);
+    setDisplayName(initialDisplayName);
+    setPassword("");
+    setErrorMessage(null);
+  }, [isOpen, startOnRegister, initialEmail, initialDisplayName]);
+
   if (!isOpen) return null;
+
+  const handleGoogle = async () => {
+    if (!onGoogleSignIn) return;
+    setErrorMessage(null);
+    setIsGoogleLoading(true);
+    try {
+      await onGoogleSignIn();
+      onClose();
+    } catch (err: any) {
+      console.error("Google sign-in failed:", err);
+      if (err.code === "auth/popup-closed-by-user" || err.code === "auth/cancelled-popup-request") {
+        // The user backed out on purpose; nothing to report.
+      } else if (err.code === "auth/unauthorized-domain") {
+        setErrorMessage(
+          "This domain is not authorised for Google sign-in. Add it under Authentication -> Settings -> Authorized domains in the Firebase console."
+        );
+      } else if (err.code === "auth/popup-blocked") {
+        setErrorMessage("Your browser blocked the sign-in popup. Allow popups for this site and try again.");
+      } else {
+        setErrorMessage(err.message || "Google sign-in failed. Please try again.");
+      }
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,10 +158,10 @@ export default function AuthModal({ isOpen, onClose, onSignUp, onSignIn }: AuthM
             </svg>
           </div>
           <h3 className="font-display font-black text-xl text-slate-900 tracking-tight">
-            {isSignUpTab ? "Create Your Chess Account" : "Welcome Back"}
+            {isSignUpTab ? "Create Your Account" : "Welcome Back"}
           </h3>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            {isSignUpTab ? "Join now to sync your tactical training cards" : "Sign in to access your saved chess decks"}
+            {isSignUpTab ? "Join now to sync your cards across devices" : "Sign in to access your saved decks"}
           </p>
         </div>
 
@@ -141,11 +197,50 @@ export default function AuthModal({ isOpen, onClose, onSignUp, onSignIn }: AuthM
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-4">
+          {cloudUpgradeNotice && (
+            <div className="flex gap-2.5 items-start bg-sky-50 border border-sky-200 text-sky-950 p-3.5 rounded-2xl text-xs leading-relaxed">
+              <CloudUpload className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+              <p>
+                Registering here creates a <strong>real cloud account</strong>. Your existing decks are kept on this
+                device and you will be offered to copy them up once you are signed in.
+              </p>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="flex gap-2.5 items-start bg-rose-50 border border-rose-100 text-rose-900 p-3.5 rounded-2xl text-xs font-semibold leading-relaxed animate-shake">
               <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
               <p>{errorMessage}</p>
             </div>
+          )}
+
+          {onGoogleSignIn && (
+            <>
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={isLoading || isGoogleLoading}
+                className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold py-3 rounded-2xl text-sm transition flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              >
+                {isGoogleLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 48 48" aria-hidden="true">
+                    <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.0 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z" />
+                    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.0 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+                    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.5 5C9.6 39.6 16.2 44 24 44z" />
+                    <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C39.1 36.5 44 31 44 24c0-1.3-.1-2.6-.4-3.9z" />
+                  </svg>
+                )}
+                <span>Continue with Google</span>
+              </button>
+
+              <div className="flex items-center gap-3 py-0.5">
+                <span className="h-px flex-1 bg-slate-200" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">or use email</span>
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+            </>
           )}
 
           {isSignUpTab && (
@@ -159,7 +254,7 @@ export default function AuthModal({ isOpen, onClose, onSignUp, onSignIn }: AuthM
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g. Garry Kasparov"
+                  placeholder="e.g. Alex Morgan"
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl py-3 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition"
                   disabled={isLoading}
                 />

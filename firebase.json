@@ -1,0 +1,6 @@
+{
+  "firestore": {
+    "database": "ai-studio-chessflashcards-ca8f0395-c891-4fed-80a7-33c605882906",
+    "rules": "firestore.rules"
+  }
+}

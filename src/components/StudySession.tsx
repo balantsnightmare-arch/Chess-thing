@@ -1,20 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { 
-  X, 
-  ArrowLeft, 
-  ArrowRight, 
-  RotateCw, 
-  CheckCircle, 
-  AlertCircle, 
-  HelpCircle, 
-  Award, 
-  Lightbulb, 
-  Tag, 
-  ChevronRight,
+import { getCardItems, getCardTitle, makeTextItem, pickRandomIndex } from "../lib/cards";
+import { PromptItemRow, PromptItemView } from "./PromptItemView";
+import {
+  X,
+  ArrowLeft,
+  ArrowRight,
+  RotateCw,
+  CheckCircle,
+  AlertCircle,
+  HelpCircle,
+  Award,
+  Lightbulb,
+  Tag,
   RefreshCw,
   Zap,
-  Play
+  Play,
+  Shuffle,
+  Layers
 } from "lucide-react";
 
 interface StudySessionProps {
@@ -22,6 +25,8 @@ interface StudySessionProps {
   cards: ChessCard[];
   onClose: () => void;
   onUpdateCardProgress: (cardId: string, mastered: boolean) => void;
+  /** Study the deck back-to-front: the answer becomes the prompt. */
+  isSwapped: boolean;
 }
 
 export default function StudySession({
@@ -29,28 +34,123 @@ export default function StudySession({
   cards,
   onClose,
   onUpdateCardProgress,
+  isSwapped,
 }: StudySessionProps) {
-  const [sessionCards, setSessionCards] = useState<ChessCard[]>([]);
+  // The session is stored as an ordered list of card ids, not card objects.
+  // Grading a card reloads the deck from storage, which used to hand this
+  // component a brand new `cards` array and reset the run back to card 1.
+  const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
-  
+
+  // Which prompt is currently drawn for the card on screen.
+  const [promptIndex, setPromptIndex] = useState(0);
+
   // Track stats for current study run
   const [correctCount, setCorrectCount] = useState(0);
   const [incorrectCount, setIncorrectCount] = useState(0);
   const [incorrectCardIds, setIncorrectCardIds] = useState<string[]>([]);
 
-  // Initialize session cards (either all or sub-selection)
-  useEffect(() => {
-    // Clone cards to avoid direct mutation
-    setSessionCards([...cards]);
+  const cardsById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards]);
+
+  // Only the membership of the deck restarts a run; edits to a card's mastery
+  // or review count leave the session untouched.
+  const deckMembership = useMemo(() => cards.map((card) => card.id).join("|"), [cards]);
+
+  const resetRun = useCallback((ids: string[]) => {
+    setSessionIds(ids);
     setCurrentIndex(0);
     setIsFlipped(false);
     setIsFinished(false);
     setCorrectCount(0);
     setIncorrectCount(0);
     setIncorrectCardIds([]);
-  }, [cards]);
+  }, []);
+
+  useEffect(() => {
+    resetRun(deckMembership ? deckMembership.split("|") : []);
+  }, [deck.id, deckMembership, resetRun]);
+
+  const sessionCards = useMemo(
+    () =>
+      sessionIds
+        .map((id) => cardsById.get(id))
+        .filter((card): card is ChessCard => card !== undefined),
+    [sessionIds, cardsById]
+  );
+
+  const currentCard = sessionCards[currentIndex];
+  const promptItems = useMemo(
+    () => (currentCard ? getCardItems(currentCard) : []),
+    [currentCard]
+  );
+
+  // Draw a fresh random prompt whenever a different card comes up.
+  useEffect(() => {
+    if (!currentCard) return;
+    setPromptIndex(pickRandomIndex(getCardItems(currentCard).length));
+  }, [currentCard?.id]);
+
+  const safePromptIndex = promptItems.length > 0 ? Math.min(promptIndex, promptItems.length - 1) : 0;
+  const drawnItem = promptItems[safePromptIndex];
+  const otherItems = promptItems.filter((_, idx) => idx !== safePromptIndex);
+
+  /*
+   * Swapped decks show the answer first; every prompt and the question move to
+   * the back, so the card is recalled in reverse.
+   */
+  const frontItem = isSwapped
+    ? currentCard && currentCard.backText.trim()
+      ? makeTextItem(currentCard.backText, "swapped-answer")
+      : undefined
+    : drawnItem;
+  const backItems = isSwapped ? promptItems : otherItems;
+  const backLabel = isSwapped ? "The prompt" : "Rest of this card";
+  const backMainText = isSwapped ? currentCard?.frontText ?? "" : currentCard?.backText ?? "";
+  const backMainLabel = isSwapped ? "Question" : "Answer";
+
+  const handleShufflePrompt = () => {
+    setPromptIndex((prev) => pickRandomIndex(promptItems.length, prev));
+  };
+
+  const handleNext = useCallback(() => {
+    setIsFlipped(false);
+    setTimeout(() => {
+      if (currentIndex < sessionCards.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        setIsFinished(true);
+      }
+    }, 150);
+  }, [currentIndex, sessionCards.length]);
+
+  const handlePrev = useCallback(() => {
+    if (currentIndex === 0) return;
+    setIsFlipped(false);
+    setTimeout(() => setCurrentIndex(currentIndex - 1), 150);
+  }, [currentIndex]);
+
+  const handleGrade = useCallback(
+    (gotIt: boolean) => {
+      if (!currentCard) return;
+
+      // Record grading
+      if (gotIt) {
+        setCorrectCount((prev) => prev + 1);
+      } else {
+        setIncorrectCount((prev) => prev + 1);
+        setIncorrectCardIds((prev) => [...prev, currentCard.id]);
+      }
+
+      // Call upstream trigger to persist card's mastery state
+      onUpdateCardProgress(currentCard.id, gotIt);
+
+      // Proceed to next card automatically with brief delay to let them see the flip reset
+      handleNext();
+    },
+    [currentCard, handleNext, onUpdateCardProgress]
+  );
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -77,15 +177,15 @@ export default function StudySession({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentIndex, isFlipped, isFinished, sessionCards]);
+  }, [isFinished, handleNext, handlePrev, handleGrade]);
 
-  if (sessionCards.length === 0) {
+  if (sessionCards.length === 0 || !currentCard) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center bg-white rounded-3xl border border-slate-200">
         <HelpCircle className="w-16 h-16 text-slate-300 mb-4 animate-bounce" />
         <h3 className="font-display font-extrabold text-xl text-slate-800">No cards in this deck</h3>
         <p className="text-sm text-slate-500 mt-2 max-w-sm">
-          You need to add at least one chess position card to this deck to start studying it.
+          You need to add at least one card to this deck to start studying it.
         </p>
         <button
           onClick={onClose}
@@ -97,64 +197,15 @@ export default function StudySession({
     );
   }
 
-  const currentCard = sessionCards[currentIndex];
-
-  const handleNext = () => {
-    setIsFlipped(false);
-    setTimeout(() => {
-      if (currentIndex < sessionCards.length - 1) {
-        setCurrentIndex((prev) => prev + 1);
-      } else {
-        setIsFinished(true);
-      }
-    }, 150);
-  };
-
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setIsFlipped(false);
-      setTimeout(() => {
-        setCurrentIndex((prev) => prev - 1);
-      }, 150);
-    }
-  };
-
-  const handleGrade = (gotIt: boolean) => {
-    // Record grading
-    if (gotIt) {
-      setCorrectCount((prev) => prev + 1);
-    } else {
-      setIncorrectCount((prev) => prev + 1);
-      setIncorrectCardIds((prev) => [...prev, currentCard.id]);
-    }
-
-    // Call upstream trigger to persist card's mastery state in IndexedDB
-    onUpdateCardProgress(currentCard.id, gotIt);
-
-    // Proceed to next card automatically with brief delay to let them see the flip reset
-    handleNext();
-  };
-
   const handleRestartAll = () => {
-    setSessionCards([...cards]);
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setIsFinished(false);
-    setCorrectCount(0);
-    setIncorrectCount(0);
-    setIncorrectCardIds([]);
+    resetRun(cards.map((card) => card.id));
   };
 
   const handleRestartIncorrect = () => {
-    const wrongCards = cards.filter((c) => incorrectCardIds.includes(c.id));
-    setSessionCards(wrongCards);
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setIsFinished(false);
-    setCorrectCount(0);
-    setIncorrectCount(0);
-    setIncorrectCardIds([]);
+    resetRun(cards.filter((c) => incorrectCardIds.includes(c.id)).map((card) => card.id));
   };
+
+  const gradedTotal = Math.max(1, correctCount + incorrectCount);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -190,7 +241,7 @@ export default function StudySession({
                 • Press <strong>Space</strong> to Flip, <strong>← / →</strong> to Navigate, <strong>1 / 2</strong> to Grade
               </span>
             </div>
-            
+
             <div className="flex items-center space-x-1.5 text-xs text-slate-500 font-medium">
               <span className="text-emerald-600 font-bold">{correctCount} mastered</span>
               <span>•</span>
@@ -199,7 +250,7 @@ export default function StudySession({
           </div>
 
           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div 
+            <div
               className="bg-amber-400 h-full rounded-full transition-all duration-300"
               style={{ width: `${((currentIndex + 1) / sessionCards.length) * 100}%` }}
             />
@@ -229,61 +280,86 @@ export default function StudySession({
                         <span className="w-2.5 h-2.5 bg-black border border-slate-600 rounded-full inline-block" />
                         Black to Play
                       </span>
-                    ) : (
+                    ) : currentCard.sideToMove === "Unknown" ? (
                       <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1 rounded-lg">
                         Setup Position
                       </span>
-                    )}
+                    ) : null}
 
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      currentCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
-                      currentCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
-                      "bg-rose-50 text-rose-700"
-                    }`}>
-                      {currentCard.difficulty}
-                    </span>
+                    {currentCard.difficulty && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                        currentCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
+                        currentCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
+                        "bg-rose-50 text-rose-700"
+                      }`}>
+                        {currentCard.difficulty}
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-slate-400 flex items-center space-x-1 text-xs">
                     <RotateCw className="w-4 h-4 animate-spin-slow text-amber-500" />
-                    <span>Click card to reveal solution</span>
+                    <span>Click card to reveal the other side</span>
                   </div>
                 </div>
 
-                {/* Front Body (Grid layout for image & question text) */}
+                {/* Front Body (Grid layout for the drawn prompt & question text) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-auto items-center">
-                  {/* Chess Position Picture */}
-                  <div className="w-full flex justify-center">
-                    <div className="bg-slate-900 p-2.5 rounded-2xl shadow-md border border-slate-800 w-full max-w-[280px] sm:max-w-[320px] aspect-square flex items-center justify-center overflow-hidden relative group">
-                      <img
-                        src={currentCard.imageUrl}
-                        alt="Chess Board Position"
-                        className="w-full h-full object-contain rounded-lg"
-                        referrerPolicy="no-referrer"
-                      />
+                  {/* Randomly drawn prompt: a picture or a phrase */}
+                  <div className="w-full flex flex-col items-center gap-2">
+                    <div className="w-full max-w-[280px] sm:max-w-[320px]">
+                      {frontItem ? (
+                        <PromptItemView item={frontItem} alt={getCardTitle(currentCard)} />
+                      ) : (
+                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-xs text-slate-400 text-center p-4">
+                          {isSwapped ? "This card has no answer to show." : "This card has no prompts yet."}
+                        </div>
+                      )}
                     </div>
+
+                    {!isSwapped && promptItems.length > 1 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <Layers className="w-3 h-3" />
+                          Prompt {safePromptIndex + 1} of {promptItems.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShufflePrompt();
+                          }}
+                          className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 px-2 py-0.5 rounded-md transition cursor-pointer flex items-center gap-1"
+                          title="Draw a different prompt"
+                        >
+                          <Shuffle className="w-3 h-3" /> Shuffle
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Question Prompt */}
                   <div className="space-y-4">
                     <h4 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 leading-tight">
-                      {currentCard.title}
+                      {getCardTitle(currentCard)}
                     </h4>
-                    
+
                     <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 shadow-inner">
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                        Question / Study Prompt
+                        {isSwapped ? "Recall the prompt" : "Question / Study Prompt"}
                       </div>
                       <p className="text-slate-700 text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
-                        {currentCard.frontText || "Find the best continuation in this position."}
+                        {isSwapped
+                          ? "What was on the front of this card?"
+                          : currentCard.frontText || "What is the answer?"}
                       </p>
                     </div>
 
                     {currentCard.tacticalThemes.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {currentCard.tacticalThemes.map((tag, idx) => (
-                          <span 
-                            key={idx} 
+                          <span
+                            key={idx}
                             className="bg-slate-100 text-slate-600 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-md flex items-center gap-1"
                           >
                             <Tag className="w-3 h-3 text-slate-400" /> {tag}
@@ -310,31 +386,50 @@ export default function StudySession({
                 <div className="flex justify-between items-center pb-3 border-b border-slate-800/80 relative z-10">
                   <div className="flex items-center space-x-2 text-amber-400">
                     <Zap className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Solution / Analysis</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">
+                      {isSwapped ? "The prompt" : "Answer"}
+                    </span>
                   </div>
 
                   <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-medium">
-                    Grandmaster Annotations
+                    Card Back
                   </span>
                 </div>
 
-                {/* Back Body (Scrollable solution & notes) */}
+                {/* Back Body (Scrollable solution, remaining prompts & notes) */}
                 <div className="my-auto space-y-4 max-h-[300px] sm:max-h-[340px] overflow-y-auto pr-1 no-scrollbar relative z-10">
-                  {/* Solution Box */}
-                  <div className="bg-amber-400/5 border border-amber-400/15 rounded-2xl p-4">
-                    <h5 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                      <CheckCircle className="w-3.5 h-3.5" /> Best Continuation
-                    </h5>
-                    <p className="text-slate-100 font-semibold text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
-                      {currentCard.backText}
-                    </p>
-                  </div>
+                  {/* The prompts that were not drawn for the front */}
+                  {backItems.length > 0 && (
+                    <div className="bg-slate-900/60 border border-slate-800/70 rounded-2xl p-4">
+                      <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        {backLabel} ({backItems.length})
+                      </h5>
+                      <div className="space-y-2">
+                        {backItems.map((item, idx) => (
+                          <PromptItemRow key={item.id} item={item} index={idx + 1} dark />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Answer, or the question when the sides are swapped */}
+                  {backMainText && (
+                    <div className="bg-amber-400/5 border border-amber-400/15 rounded-2xl p-4">
+                      <h5 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5" /> {backMainLabel}
+                      </h5>
+                      <p className="text-slate-100 font-semibold text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
+                        {backMainText}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Additional Notes */}
                   {currentCard.additionalNotes && (
                     <div className="bg-slate-900 border border-slate-800/60 rounded-2xl p-4">
                       <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                        <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Coaching Notes & Themes
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Notes
                       </h5>
                       <p className="text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-sans">
                         {currentCard.additionalNotes}
@@ -412,12 +507,12 @@ export default function StudySession({
               <Award className="w-8 h-8" />
             </div>
 
-            <h3 className="font-display font-extrabold text-2.5xl text-slate-900 leading-tight">
+            <h3 className="font-display font-extrabold text-3xl text-slate-900 leading-tight">
               Session Completed!
             </h3>
-            
+
             <p className="text-sm text-slate-500 font-sans">
-              Excellent job reviewing your chess flashcards. Testing your recall is the best way to wire tactical patterns into your subconscious memory!
+Excellent job reviewing your cards. Testing your recall is the most reliable way to commit things to memory.
             </p>
 
             {/* Run Stats */}
@@ -430,7 +525,7 @@ export default function StudySession({
                   {correctCount}
                 </span>
                 <span className="text-xs text-slate-400 font-medium block">
-                  ({Math.round((correctCount / sessionCards.length) * 100)}%)
+                  ({Math.round((correctCount / gradedTotal) * 100)}%)
                 </span>
               </div>
 
@@ -442,7 +537,7 @@ export default function StudySession({
                   {incorrectCount}
                 </span>
                 <span className="text-xs text-slate-400 font-medium block">
-                  ({Math.round((incorrectCount / sessionCards.length) * 100)}%)
+                  ({Math.round((incorrectCount / gradedTotal) * 100)}%)
                 </span>
               </div>
             </div>

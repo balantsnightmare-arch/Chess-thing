@@ -1,3 +1,16 @@
 node_modules/
 .env*
 !.env.example
+
+# Build output is produced inside the image; copying a host build in is both
+# wasteful and a way to ship stale or wrong-platform artefacts by accident.
+dist/
+build/
+
+# Not needed to build or run the server.
+.git/
+.github/
+.claude/
+*.log
+coverage/
+README.md
