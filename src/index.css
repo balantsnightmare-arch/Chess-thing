@@ -32,3 +32,44 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/*
+ * Animations referenced throughout the UI. Without these keyframes the
+ * animate-fade-in / animate-shake / animate-spin-slow classes were inert.
+ */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100%   { transform: translateX(0); }
+  20%, 60%   { transform: translateX(-5px); }
+  40%, 80%   { transform: translateX(5px); }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out both;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out both;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 4s linear infinite;
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-shake,
+  .animate-spin-slow {
+    animation: none;
+  }
+}

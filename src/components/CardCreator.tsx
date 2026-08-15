@@ -1,17 +1,27 @@
 import React, { useState, useRef } from "react";
-import { ChessCard } from "../types";
-import { 
-  Upload, 
-  Sparkles, 
-  Save, 
-  X, 
-  HelpCircle, 
-  Tag, 
-  Eye, 
+import { CardItem, ChessCard } from "../types";
+import {
+  createId,
+  estimateCardBytes,
+  formatBytes,
+  getCardItems,
+  processImageFile,
+  MAX_CARD_BYTES,
+} from "../lib/cards";
+import {
+  Upload,
+  Sparkles,
+  Save,
+  X,
   RefreshCw,
-  Lightbulb,
   FileImage,
-  AlertTriangle
+  AlertTriangle,
+  Type,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  Shuffle,
+  Loader2,
 } from "lucide-react";
 
 interface CardCreatorProps {
@@ -22,7 +32,11 @@ interface CardCreatorProps {
 }
 
 export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: CardCreatorProps) {
-  const [image, setImage] = useState<string | null>(cardToEdit?.imageUrl || null);
+  // Prompt items: pictures and phrases. One is drawn at random for the front.
+  const [items, setItems] = useState<CardItem[]>(() =>
+    cardToEdit ? getCardItems(cardToEdit) : []
+  );
+  const [phraseInput, setPhraseInput] = useState("");
   const [title, setTitle] = useState(cardToEdit?.title || "");
   const [sideToMove, setSideToMove] = useState<"White" | "Black" | "Unknown">(cardToEdit?.sideToMove || "White");
   const [tagInput, setTagInput] = useState("");
@@ -36,20 +50,40 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Convert File to base64
-  const handleFileChange = (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      alert("Please select a valid image file.");
+  const imageItems = items.filter((item) => item.kind === "image");
+  const textItems = items.filter((item) => item.kind === "text");
+  const firstImage = imageItems.length > 0 ? imageItems[0].content : "";
+
+  // Convert dropped/selected files into (downscaled) image items
+  const handleFiles = async (files: FileList | File[]) => {
+    const picked = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (picked.length === 0) {
+      setFormError("Please select a valid image file.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setImage(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+
+    setIsProcessingImages(true);
+    setFormError("");
+    try {
+      const processed = await Promise.all(
+        picked.map(async (file) => ({
+          id: createId("item"),
+          kind: "image" as const,
+          content: await processImageFile(file),
+        }))
+      );
+      setItems((prev) => [...prev, ...processed]);
+    } catch (err) {
+      console.error("Image processing failed:", err);
+      setFormError("One of those images could not be read. Please try a different file.");
+    } finally {
+      setIsProcessingImages(false);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -64,17 +98,38 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragActive(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFileChange(file);
+    if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
   };
 
   const triggerFileSelect = () => {
     fileInputRef.current?.click();
   };
 
-  // Run Gemini AI Analysis
+  const handleAddPhrase = () => {
+    const phrase = phraseInput.trim();
+    if (!phrase) return;
+    setItems((prev) => [...prev, { id: createId("item"), kind: "text", content: phrase }]);
+    setPhraseInput("");
+    setFormError("");
+  };
+
+  const handleRemoveItem = (itemId: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  const handleMoveItem = (index: number, direction: -1 | 1) => {
+    setItems((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  // Run Gemini AI Analysis on the card's first picture
   const handleAiAnalysis = async () => {
-    if (!image) return;
+    if (!firstImage) return;
     setIsAnalyzing(true);
     setAnalysisError("");
 
@@ -84,15 +139,16 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ image }),
+        body: JSON.stringify({ image: firstImage }),
       });
 
       if (!res.ok) {
-        throw new Error("Failed to analyze image. Ensure your server is active.");
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.error || "Failed to analyze image. Ensure your server is active.");
       }
 
       const data = await res.json();
-      
+
       // Auto-populate fields from Gemini AI results
       if (data.title) setTitle(data.title);
       if (data.sideToPlay) {
@@ -108,10 +164,10 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       if (data.suggestedFront) setFrontText(data.suggestedFront);
       if (data.suggestedBack) setBackText(data.suggestedBack);
       if (data.additionalNotes) setAdditionalNotes(data.additionalNotes);
-      
+
     } catch (err: any) {
       console.error("Gemini AI Analysis failed:", err);
-      setAnalysisError("AI analysis failed. Please manually fill in the card details below.");
+      setAnalysisError(err?.message || "AI analysis failed. Please manually fill in the card details below.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -135,26 +191,40 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!image) {
-      alert("Please upload an image of the chess position.");
+    setFormError("");
+
+    if (items.length === 0) {
+      setFormError("Add at least one picture or phrase to this card.");
       return;
     }
-    if (!title.trim() || !frontText.trim() || !backText.trim()) {
-      alert("Please fill out Title, Question/Front, and Solution/Back text.");
+    if (!title.trim()) {
+      setFormError("Please give the flashcard a title.");
       return;
     }
 
-    onSave({
+    const draft = {
       deckId,
       title: title.trim(),
-      imageUrl: image,
+      // Kept in sync with the first image so list thumbnails and AI analysis work.
+      imageUrl: firstImage,
+      items,
       sideToMove,
       tacticalThemes: tags,
       frontText: frontText.trim(),
       backText: backText.trim(),
       additionalNotes: additionalNotes.trim(),
       difficulty,
-    }, cardToEdit?.id);
+    };
+
+    const size = estimateCardBytes(draft);
+    if (size > MAX_CARD_BYTES) {
+      setFormError(
+        `This card is ${formatBytes(size)}, over the ${formatBytes(MAX_CARD_BYTES)} limit for a single card. Remove a picture and try again.`
+      );
+      return;
+    }
+
+    onSave(draft, cardToEdit?.id);
   };
 
   return (
@@ -166,12 +236,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             {cardToEdit ? "Edit Chess Flashcard" : "Create Chess Flashcard"}
           </h3>
           <p className="text-sm text-slate-500 font-sans mt-1">
-            {cardToEdit 
-              ? "Modify details of your chess study card." 
-              : "Upload an image of your chess position to start studying it."}
+            {cardToEdit
+              ? "Modify details of your chess study card."
+              : "Add one or more pictures and phrases, then write the solution."}
           </p>
         </div>
-        
+
         <button
           onClick={onCancel}
           className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition cursor-pointer"
@@ -181,79 +251,170 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* LEFT COLUMN: Upload and AI triggering (5/12 span) */}
+
+        {/* LEFT COLUMN: Prompt items and AI triggering (5/12 span) */}
         <div className="lg:col-span-5 space-y-6">
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Chess Board Image *
+              Card Prompts *
             </label>
-            
-            {/* Drag & Drop Upload Zone */}
-            {!image ? (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={triggerFileSelect}
-                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[260px] ${
-                  isDragActive
-                    ? "border-amber-400 bg-amber-50/20"
-                    : "border-slate-200 hover:border-amber-400 hover:bg-slate-50"
-                }`}
-              >
-                <div className="bg-slate-50 text-slate-400 p-4 rounded-full mb-3">
-                  <Upload className="w-6 h-6 text-slate-500" />
-                </div>
-                <p className="font-display font-bold text-sm text-slate-800">
-                  Drag & drop image here
-                </p>
-                <p className="text-xs text-slate-400 font-sans mt-1">
-                  Supports JPEG, PNG, or SVGs up to 10MB
-                </p>
-                <span className="mt-4 inline-block bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition">
-                  Browse Files
-                </span>
+            <div className="bg-amber-50/70 border border-amber-100 rounded-xl p-3 flex gap-2.5 items-start">
+              <Shuffle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-900 leading-relaxed font-sans">
+                Add as many pictures and phrases as you like. Each time the card is opened, <strong>one is drawn at random</strong> for the front and the rest are revealed on the back.
+              </p>
+            </div>
+
+            {/* Drag & Drop Upload Zone (accepts several files at once) */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={triggerFileSelect}
+              className={`border-2 border-dashed rounded-2xl text-center cursor-pointer transition flex flex-col items-center justify-center ${
+                items.length > 0 ? "p-4 min-h-[120px]" : "p-6 min-h-[200px]"
+              } ${
+                isDragActive
+                  ? "border-amber-400 bg-amber-50/20"
+                  : "border-slate-200 hover:border-amber-400 hover:bg-slate-50"
+              }`}
+            >
+              <div className="bg-slate-50 text-slate-400 p-3 rounded-full mb-2">
+                {isProcessingImages ? (
+                  <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                ) : (
+                  <Upload className="w-5 h-5 text-slate-500" />
+                )}
+              </div>
+              <p className="font-display font-bold text-sm text-slate-800">
+                {isProcessingImages ? "Preparing images..." : "Drag & drop pictures here"}
+              </p>
+              <p className="text-xs text-slate-400 font-sans mt-1">
+                Select several at once — JPEG, PNG or SVG
+              </p>
+              <span className="mt-3 inline-block bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition">
+                Browse Files
+              </span>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files?.length) handleFiles(e.target.files);
+                  // Reset so re-picking the same file still fires a change event.
+                  e.target.value = "";
+                }}
+                className="hidden"
+              />
+            </div>
+
+            {/* Phrase entry */}
+            <div className="flex gap-2 pt-1">
+              <div className="relative flex-1">
+                <Type className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                 <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileChange(file);
+                  type="text"
+                  value={phraseInput}
+                  placeholder="Add a word or phrase..."
+                  onChange={(e) => setPhraseInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddPhrase();
+                    }
                   }}
-                  className="hidden"
+                  className="w-full pl-9.5 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans"
                 />
               </div>
-            ) : (
-              /* Image Preview with Reset option */
-              <div className="border border-slate-200 rounded-2xl p-3 bg-slate-50 flex flex-col items-center relative group">
-                <div className="w-full h-64 flex items-center justify-center overflow-hidden rounded-xl bg-slate-900 border border-slate-800 relative">
-                  <img
-                    src={image}
-                    alt="Chess position board preview"
-                    className="max-h-full max-w-full object-contain rounded"
-                  />
-                  
-                  <button
-                    type="button"
-                    onClick={() => setImage(null)}
-                    className="absolute top-3 right-3 bg-red-600/90 hover:bg-red-700 text-white p-2 rounded-xl shadow-md transition"
-                    title="Remove Image"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+              <button
+                type="button"
+                onClick={handleAddPhrase}
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add</span>
+              </button>
+            </div>
+
+            {/* Item list */}
+            {items.length > 0 && (
+              <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+                <div className="bg-slate-50/80 px-3 py-2 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {items.length} {items.length === 1 ? "prompt" : "prompts"} on this card
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-sans">
+                    {imageItems.length} picture{imageItems.length === 1 ? "" : "s"} · {textItems.length} phrase{textItems.length === 1 ? "" : "s"}
+                  </span>
                 </div>
-                
-                <p className="text-xs text-slate-400 font-sans mt-2 flex items-center gap-1">
-                  <FileImage className="w-3.5 h-3.5" /> Position picture uploaded
-                </p>
+
+                {items.map((item, index) => (
+                  <div key={item.id} className="flex items-center gap-3 p-2.5 bg-white">
+                    <span className="text-[10px] font-mono font-bold text-slate-400 w-4 shrink-0 text-center">
+                      {index + 1}
+                    </span>
+
+                    {item.kind === "image" ? (
+                      <div className="w-12 h-12 bg-slate-900 rounded-lg overflow-hidden border border-slate-800 shrink-0 flex items-center justify-center">
+                        <img
+                          src={item.content}
+                          alt={`Prompt ${index + 1}`}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 bg-amber-50 border border-amber-100 rounded-lg shrink-0 flex items-center justify-center">
+                        <Type className="w-5 h-5 text-amber-600" />
+                      </div>
+                    )}
+
+                    <p className="flex-1 min-w-0 text-xs text-slate-700 font-sans truncate">
+                      {item.kind === "image" ? (
+                        <span className="text-slate-400 italic flex items-center gap-1">
+                          <FileImage className="w-3.5 h-3.5" /> Picture
+                        </span>
+                      ) : (
+                        item.content
+                      )}
+                    </p>
+
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveItem(index, -1)}
+                        disabled={index === 0}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        title="Move up"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveItem(index, 1)}
+                        disabled={index === items.length - 1}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        title="Move down"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(item.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                        title="Remove prompt"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
           {/* AI trigger Button */}
-          {image && (
+          {firstImage && (
             <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 space-y-3.5">
               <div className="flex items-start space-x-3">
                 <div className="bg-amber-100 text-amber-800 p-2 rounded-xl">
@@ -264,7 +425,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
                     Let AI Analyze Your Position
                   </h4>
                   <p className="text-xs text-slate-400 leading-relaxed font-sans mt-0.5">
-                    Gemini will analyze your board image, detect white vs black pieces, draft a core puzzle question, provide solutions, and annotate positional details automatically!
+                    Gemini will analyze the first picture on this card, detect white vs black pieces, draft a core puzzle question, provide solutions, and annotate positional details automatically!
                   </p>
                 </div>
               </div>
@@ -388,12 +549,11 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
 
           {/* FRONT TEXT: Question/Study prompt */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between">
-              <span>Card Front (Question/Prompt) *</span>
-              <span className="text-[10px] text-slate-400 uppercase">Visible on front side</span>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between">
+              <span>Card Front (Question/Prompt)</span>
+              <span className="text-[10px] text-slate-400 uppercase">Shown with the drawn prompt</span>
             </label>
             <textarea
-              required
               rows={3}
               placeholder="e.g. Find the winning knight sacrifice. What are White's threats?"
               value={frontText}
@@ -404,12 +564,11 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
 
           {/* BACK TEXT: Answer/Solution */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between">
-              <span>Card Back (Solution/Answer) *</span>
-              <span className="text-[10px] text-slate-400 uppercase">Visible on back side</span>
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between">
+              <span>Card Back (Solution/Answer)</span>
+              <span className="text-[10px] text-slate-400 uppercase">Shown with the other prompts</span>
             </label>
             <textarea
-              required
               rows={3}
               placeholder="e.g. 1. Nxf7+! Rxf7 2. Qxe8+ winning back-rank material checkmate."
               value={backText}
@@ -432,6 +591,13 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             />
           </div>
 
+          {formError && (
+            <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2 text-xs text-rose-800 font-medium">
+              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex space-x-3 pt-4 border-t border-slate-100">
             <button
@@ -441,10 +607,11 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             >
               Cancel
             </button>
-            
+
             <button
               type="submit"
-              className="flex-1 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-slate-900/10 cursor-pointer"
+              disabled={isProcessingImages}
+              className="flex-1 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-semibold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-slate-900/10 cursor-pointer disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
               <span>Save Flashcard</span>

@@ -1,19 +1,21 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { 
-  Play, 
-  Plus, 
-  Search, 
-  Trash2, 
-  BookOpen, 
-  ArrowLeft, 
-  Tag, 
-  CheckCircle, 
+import { getCardItems, getPrimaryImage, getPrimaryText, pickRandomIndex } from "../lib/cards";
+import { PromptItemRow, PromptItemView } from "./PromptItemView";
+import {
+  Plus,
+  Search,
+  Trash2,
+  BookOpen,
+  ArrowLeft,
+  Tag,
+  CheckCircle,
   X,
-  HelpCircle,
-  Eye,
   Edit,
-  GraduationCap
+  GraduationCap,
+  Layers,
+  Shuffle,
+  Type
 } from "lucide-react";
 
 interface CardListProps {
@@ -39,29 +41,56 @@ export default function CardList({
 }: CardListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMastered, setFilterMastered] = useState<"All" | "Mastered" | "Review">("All");
-  
+
   // Selected Card for popup preview
-  const [previewCard, setPreviewCard] = useState<ChessCard | null>(null);
+  const [previewCardId, setPreviewCardId] = useState<string | null>(null);
   const [isPreviewFlipped, setIsPreviewFlipped] = useState(false);
+  // Which prompt was drawn for the front of the previewed card.
+  const [previewPromptIndex, setPreviewPromptIndex] = useState(0);
+
+  // Read the card straight from props so toggling mastery inside the modal
+  // cannot leave the preview showing a stale copy.
+  const previewCard = previewCardId ? cards.find((c) => c.id === previewCardId) ?? null : null;
+
+  const previewItems = useMemo(
+    () => (previewCard ? getCardItems(previewCard) : []),
+    [previewCard]
+  );
+  const safePreviewIndex =
+    previewItems.length > 0 ? Math.min(previewPromptIndex, previewItems.length - 1) : 0;
+  const drawnItem = previewItems[safePreviewIndex];
+  const otherItems = previewItems.filter((_, idx) => idx !== safePreviewIndex);
 
   const handleOpenPreview = (card: ChessCard) => {
-    setPreviewCard(card);
+    setPreviewCardId(card.id);
     setIsPreviewFlipped(false);
+    // Draw a random prompt each time the card is opened.
+    setPreviewPromptIndex(pickRandomIndex(getCardItems(card).length));
   };
 
   const handleClosePreview = () => {
-    setPreviewCard(null);
+    setPreviewCardId(null);
     setIsPreviewFlipped(false);
   };
 
-  const filteredCards = cards.filter((card) => {
-    const matchesSearch = 
-      card.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      card.frontText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      card.backText.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      card.tacticalThemes.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+  const handleShufflePrompt = () => {
+    setPreviewPromptIndex((prev) => pickRandomIndex(previewItems.length, prev));
+  };
 
-    const matchesFilter = 
+  const filteredCards = cards.filter((card) => {
+    const needle = searchQuery.toLowerCase();
+    const haystacks = [
+      card.title,
+      card.frontText,
+      card.backText,
+      ...getCardItems(card)
+        .filter((item) => item.kind === "text")
+        .map((item) => item.content),
+      ...card.tacticalThemes,
+    ];
+    const matchesSearch = haystacks.some((value) => (value ?? "").toLowerCase().includes(needle));
+
+    const matchesFilter =
       filterMastered === "All" ||
       (filterMastered === "Mastered" && card.mastered) ||
       (filterMastered === "Review" && !card.mastered);
@@ -82,11 +111,11 @@ export default function CardList({
           >
             <ArrowLeft className="w-4 h-4" /> Back to Decks
           </button>
-          
+
           <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-slate-900 tracking-tight">
             {deck.name}
           </h2>
-          
+
           <p className="text-slate-500 text-sm max-w-xl leading-relaxed font-sans">
             {deck.description || "Study your custom uploaded chess positions and solutions."}
           </p>
@@ -152,98 +181,125 @@ export default function CardList({
       {/* Cards List Grid */}
       {filteredCards.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {filteredCards.map((card) => (
-            <div
-              key={card.id}
-              onClick={() => handleOpenPreview(card)}
-              className="bg-white border border-slate-200/80 hover:border-slate-300 rounded-2xl p-4 flex gap-4 hover:shadow-lg transition duration-200 cursor-pointer relative group"
-            >
-              {/* Card Mini-Thumbnail */}
-              <div className="w-20 h-20 bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center shrink-0">
-                <img
-                  src={card.imageUrl}
-                  alt={card.title}
-                  className="w-full h-full object-contain"
-                />
-              </div>
+          {filteredCards.map((card) => {
+            const itemCount = getCardItems(card).length;
+            const thumbnail = getPrimaryImage(card);
+            const thumbnailText = getPrimaryText(card);
 
-              {/* Card Details */}
-              <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="font-display font-bold text-sm sm:text-base text-slate-900 truncate group-hover:text-amber-800 transition-colors">
-                    {card.title}
-                  </h4>
-                  
-                  {/* Mastered / Need Review Status Checkmark (Interactive Toggle) */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleMastered(card.id);
-                    }}
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 shrink-0 transition-colors cursor-pointer ${
-                      card.mastered 
-                        ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200" 
-                        : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
-                    }`}
-                    title={card.mastered ? "Click to move to Review" : "Click to mark as Mastered"}
-                  >
-                    <CheckCircle className={`w-3 h-3 ${card.mastered ? "text-emerald-600 fill-emerald-600" : "text-rose-400"}`} />
-                    <span>{card.mastered ? "Mastered" : "Review"}</span>
-                  </button>
-                </div>
+            return (
+              <div
+                key={card.id}
+                onClick={() => handleOpenPreview(card)}
+                className="bg-white border border-slate-200/80 hover:border-slate-300 rounded-2xl p-4 flex gap-4 hover:shadow-lg transition duration-200 cursor-pointer relative group"
+              >
+                {/* Card Mini-Thumbnail */}
+                <div className="relative shrink-0">
+                  {thumbnail ? (
+                    <div className="w-20 h-20 bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+                      <img
+                        src={thumbnail}
+                        alt={card.title}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    /* Text-only card: show the first phrase instead of an empty frame */
+                    <div className="w-20 h-20 bg-gradient-to-br from-amber-50 to-white rounded-xl overflow-hidden border border-amber-200/70 flex flex-col items-center justify-center text-center p-1.5 gap-1">
+                      <Type className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span className="text-[9px] font-bold text-slate-700 leading-tight line-clamp-3 break-words">
+                        {thumbnailText}
+                      </span>
+                    </div>
+                  )}
 
-                <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                  {card.frontText}
-                </p>
-
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  {/* Side to Move Badge */}
-                  {card.sideToMove === "White" ? (
-                    <span className="bg-slate-100 border border-slate-200 text-slate-800 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-white border border-slate-400 rounded-full inline-block" /> White
+                  {itemCount > 1 && (
+                    <span
+                      className="absolute -top-1.5 -right-1.5 bg-slate-900 text-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-slate-700 flex items-center gap-0.5 shadow-sm"
+                      title={`${itemCount} prompts — one is drawn at random`}
+                    >
+                      <Layers className="w-2.5 h-2.5" /> {itemCount}
                     </span>
-                  ) : card.sideToMove === "Black" ? (
-                    <span className="bg-slate-900 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-black border border-slate-600 rounded-full inline-block" /> Black
-                    </span>
-                  ) : null}
-
-                  {/* Difficulty Tag */}
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                    card.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
-                    card.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
-                    "bg-rose-50 text-rose-700"
-                  }`}>
-                    {card.difficulty}
-                  </span>
-
-                  {/* Preview Themes tags */}
-                  {card.tacticalThemes.slice(0, 2).map((tag) => (
-                    <span key={tag} className="text-[10px] text-slate-400 font-sans flex items-center gap-0.5">
-                      <Tag className="w-2.5 h-2.5 text-slate-300" /> {tag}
-                    </span>
-                  ))}
-                  {card.tacticalThemes.length > 2 && (
-                    <span className="text-[9px] text-slate-400">+{card.tacticalThemes.length - 2} more</span>
                   )}
                 </div>
-              </div>
 
-              {/* Action rail (delete button absolute to prevent clicking background preview) */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm(`Are you sure you want to delete this chess card "${card.title}"?`)) {
-                    onDeleteCard(card.id);
-                  }
-                }}
-                className="absolute right-3.5 bottom-3 text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition"
-                title="Delete Card"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+                {/* Card Details */}
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-display font-bold text-sm sm:text-base text-slate-900 truncate group-hover:text-amber-800 transition-colors">
+                      {card.title}
+                    </h4>
+
+                    {/* Mastered / Need Review Status Checkmark (Interactive Toggle) */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleMastered(card.id);
+                      }}
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 shrink-0 transition-colors cursor-pointer ${
+                        card.mastered
+                          ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200"
+                          : "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
+                      }`}
+                      title={card.mastered ? "Click to move to Review" : "Click to mark as Mastered"}
+                    >
+                      <CheckCircle className={`w-3 h-3 ${card.mastered ? "text-emerald-600 fill-emerald-600" : "text-rose-400"}`} />
+                      <span>{card.mastered ? "Mastered" : "Review"}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                    {card.frontText || thumbnailText || "Open this card to draw a prompt."}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {/* Side to Move Badge */}
+                    {card.sideToMove === "White" ? (
+                      <span className="bg-slate-100 border border-slate-200 text-slate-800 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-white border border-slate-400 rounded-full inline-block" /> White
+                      </span>
+                    ) : card.sideToMove === "Black" ? (
+                      <span className="bg-slate-900 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-black border border-slate-600 rounded-full inline-block" /> Black
+                      </span>
+                    ) : null}
+
+                    {/* Difficulty Tag */}
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      card.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
+                      card.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
+                      "bg-rose-50 text-rose-700"
+                    }`}>
+                      {card.difficulty}
+                    </span>
+
+                    {/* Preview Themes tags */}
+                    {card.tacticalThemes.slice(0, 2).map((tag) => (
+                      <span key={tag} className="text-[10px] text-slate-400 font-sans flex items-center gap-0.5">
+                        <Tag className="w-2.5 h-2.5 text-slate-300" /> {tag}
+                      </span>
+                    ))}
+                    {card.tacticalThemes.length > 2 && (
+                      <span className="text-[9px] text-slate-400">+{card.tacticalThemes.length - 2} more</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action rail (delete button absolute to prevent clicking background preview) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to delete this chess card "${card.title}"?`)) {
+                      onDeleteCard(card.id);
+                    }
+                  }}
+                  className="absolute right-3.5 bottom-3 text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition"
+                  title="Delete Card"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : (
         /* Empty Deck State */
@@ -266,7 +322,7 @@ export default function CardList({
       {previewCard && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative max-h-[95vh] overflow-y-auto no-scrollbar flex flex-col justify-between">
-            
+
             {/* Modal Close Button */}
             <button
               onClick={handleClosePreview}
@@ -281,11 +337,11 @@ export default function CardList({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
                   Interactive Flashcard Preview
                 </span>
-                <h3 className="font-display font-extrabold text-xl text-slate-900 leading-tight">
+                <h3 className="font-display font-extrabold text-xl text-slate-900 leading-tight pr-8">
                   {previewCard.title}
                 </h3>
-                
-                <div className="flex items-center gap-2 mt-2">
+
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                     previewCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
                     previewCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
@@ -293,7 +349,7 @@ export default function CardList({
                   }`}>
                     {previewCard.difficulty} Difficulty
                   </span>
-                  
+
                   {previewCard.sideToMove === "White" ? (
                     <span className="bg-slate-100 border border-slate-200 text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
                       <span className="w-1.5 h-1.5 bg-white border border-slate-400 rounded-full inline-block" /> White to Play
@@ -303,6 +359,12 @@ export default function CardList({
                       <span className="w-1.5 h-1.5 bg-black border border-slate-600 rounded-full inline-block" /> Black to Play
                     </span>
                   ) : null}
+
+                  {previewItems.length > 1 && (
+                    <span className="bg-amber-50 border border-amber-200/70 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                      <Layers className="w-2.5 h-2.5" /> Prompt {safePreviewIndex + 1} of {previewItems.length}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -322,28 +384,47 @@ export default function CardList({
                       <span className="text-amber-500 font-bold">Click to Flip</span>
                     </div>
 
-                    {/* Front Body (Position Image & Prompt Question) */}
-                    <div className="my-auto space-y-4">
-                      {/* Image */}
-                      <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 flex items-center justify-center max-w-[200px] aspect-square mx-auto w-full overflow-hidden">
-                        <img
-                          src={previewCard.imageUrl}
-                          alt={previewCard.title}
-                          className="max-h-full max-w-full object-contain rounded"
-                        />
+                    {/* Front Body (randomly drawn prompt & question) */}
+                    <div className="my-auto space-y-3">
+                      <div className="max-w-[200px] mx-auto w-full">
+                        {drawnItem ? (
+                          <PromptItemView item={drawnItem} alt={previewCard.title} compact />
+                        ) : (
+                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-[11px] text-slate-400 text-center p-4">
+                            This card has no prompts yet.
+                          </div>
+                        )}
                       </div>
 
+                      {previewItems.length > 1 && (
+                        <div className="flex justify-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleShufflePrompt();
+                            }}
+                            className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                            title="Draw a different prompt"
+                          >
+                            <Shuffle className="w-3 h-3" /> Shuffle prompt
+                          </button>
+                        </div>
+                      )}
+
                       {/* Prompt / Question */}
-                      <div className="text-center bg-slate-50 border border-slate-100/80 rounded-xl p-3">
-                        <p className="text-slate-800 text-xs sm:text-sm font-medium font-sans whitespace-pre-line leading-relaxed">
-                          {previewCard.frontText}
-                        </p>
-                      </div>
+                      {previewCard.frontText && (
+                        <div className="text-center bg-slate-50 border border-slate-100/80 rounded-xl p-3">
+                          <p className="text-slate-800 text-xs sm:text-sm font-medium font-sans whitespace-pre-line leading-relaxed">
+                            {previewCard.frontText}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Front Footer */}
                     <div className="text-center text-[10px] text-slate-400 border-t border-slate-50 pt-2 font-mono">
-                      ▲ Position view • Flip to see solution
+                      ▲ Drawn at random • Flip to see the rest
                     </div>
                   </div>
 
@@ -355,17 +436,33 @@ export default function CardList({
                       <span className="text-amber-500 font-bold">Click to Flip</span>
                     </div>
 
-                    {/* Back Body (Scrollable solution & strategic coaching notes) */}
+                    {/* Back Body (remaining prompts, solution & coaching notes) */}
                     <div className="my-auto space-y-3 overflow-y-auto max-h-[220px] no-scrollbar pr-1">
+                      {/* Everything that was not drawn for the front */}
+                      {otherItems.length > 0 && (
+                        <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                            <Layers className="w-3 h-3 text-amber-400" /> Rest of this card ({otherItems.length})
+                          </span>
+                          <div className="space-y-1.5">
+                            {otherItems.map((item, idx) => (
+                              <PromptItemRow key={item.id} item={item} index={idx + 1} dark />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Solution Box */}
-                      <div className="bg-amber-400/5 border border-amber-400/10 rounded-xl p-3">
-                        <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest block mb-1">
-                          Best Moves / Explanation
-                        </span>
-                        <p className="text-slate-100 text-xs sm:text-sm font-semibold font-sans whitespace-pre-line leading-relaxed">
-                          {previewCard.backText}
-                        </p>
-                      </div>
+                      {previewCard.backText && (
+                        <div className="bg-amber-400/5 border border-amber-400/10 rounded-xl p-3">
+                          <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest block mb-1">
+                            Best Moves / Explanation
+                          </span>
+                          <p className="text-slate-100 text-xs sm:text-sm font-semibold font-sans whitespace-pre-line leading-relaxed">
+                            {previewCard.backText}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Strategic Coach notes */}
                       {previewCard.additionalNotes && (
@@ -415,10 +512,7 @@ export default function CardList({
                 {/* Smaller, Secondary Actions */}
                 <div className="grid grid-cols-3 gap-2 pt-1">
                   <button
-                    onClick={() => {
-                      onToggleMastered(previewCard.id);
-                      setPreviewCard((prev) => prev ? { ...prev, mastered: !prev.mastered } : null);
-                    }}
+                    onClick={() => onToggleMastered(previewCard.id)}
                     className={`text-[10px] sm:text-xs font-bold py-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center gap-1.5 border ${
                       previewCard.mastered
                         ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200"
@@ -431,8 +525,9 @@ export default function CardList({
 
                   <button
                     onClick={() => {
+                      const card = previewCard;
                       handleClosePreview();
-                      onEditCard(previewCard);
+                      onEditCard(card);
                     }}
                     className="bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] sm:text-xs font-bold py-2 rounded-xl transition cursor-pointer border border-amber-200/40 flex flex-col items-center justify-center gap-1.5"
                   >

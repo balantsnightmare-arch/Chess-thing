@@ -4,11 +4,9 @@ import {
   FolderPlus, 
   Trash2, 
   BookOpen, 
-  ExternalLink, 
   Search, 
   Download, 
   Upload, 
-  Calendar,
   Layers,
   ChevronRight,
   Sparkles
@@ -77,6 +75,8 @@ export default function DeckManager({
   // Import JSON backup
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset the input so picking the same file twice still fires a change event.
+    e.target.value = "";
     if (!file) return;
 
     const reader = new FileReader();
@@ -116,9 +116,9 @@ export default function DeckManager({
         
         <div className="relative z-10 max-w-2xl">
           <span className="bg-amber-400 text-slate-900 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full flex items-center gap-1 w-max">
-            <Sparkles className="w-3 h-3 animate-spin-slow" /> Powered by Gemini 3.5 AI
+            <Sparkles className="w-3 h-3 animate-spin-slow" /> Powered by Gemini AI
           </span>
-          <h2 className="font-display font-extrabold text-2xl sm:text-3.5xl text-slate-50 mt-3 tracking-tight leading-tight">
+          <h2 className="font-display font-extrabold text-2xl sm:text-4xl text-slate-50 mt-3 tracking-tight leading-tight">
             Level up your chess memory.
           </h2>
           <p className="text-slate-300 text-sm mt-2 leading-relaxed font-sans">

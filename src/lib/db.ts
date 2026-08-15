@@ -1,7 +1,21 @@
-import { ChessCard, ChessDeck } from "../types";
+import { ChessCard, ChessDeck, LocalUser } from "../types";
+import { createDemoCards, createDemoDeck } from "./demoData";
 
 const DB_NAME = "chess-flashcards-db";
-const DB_VERSION = 2;
+// v3 added ownerId, so guest data and each device account are kept apart.
+const DB_VERSION = 3;
+
+/** Owner id used for data created while nobody is signed in. */
+export const GUEST_OWNER = "guest";
+
+/** Stored records carry an owner alongside the domain fields. */
+type Owned<T> = T & { ownerId: string };
+
+/** Drop the storage-only owner field before handing records to the app. */
+function stripOwner<T>(record: Owned<T>): T {
+  const { ownerId: _ownerId, ...rest } = record as Owned<T> & Record<string, unknown>;
+  return rest as T;
+}
 
 export function initDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -18,212 +32,126 @@ export function initDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = request.result;
+      const tx = request.transaction;
+
       if (!db.objectStoreNames.contains("decks")) {
-        db.createObjectStore("decks", { keyPath: "id" });
+        const deckStore = db.createObjectStore("decks", { keyPath: "id" });
+        deckStore.createIndex("ownerId", "ownerId", { unique: false });
       }
       if (!db.objectStoreNames.contains("cards")) {
         const cardStore = db.createObjectStore("cards", { keyPath: "id" });
         cardStore.createIndex("deckId", "deckId", { unique: false });
+        cardStore.createIndex("ownerId", "ownerId", { unique: false });
       }
       if (!db.objectStoreNames.contains("users")) {
         db.createObjectStore("users", { keyPath: "email" });
+      }
+
+      // Upgrading an existing database: add the index and treat everything that
+      // was already here as guest-owned, since that is where it was visible.
+      if (event.oldVersion > 0 && event.oldVersion < 3 && tx) {
+        for (const storeName of ["decks", "cards"]) {
+          const store = tx.objectStore(storeName);
+          if (!store.indexNames.contains("ownerId")) {
+            store.createIndex("ownerId", "ownerId", { unique: false });
+          }
+          const cursorReq = store.openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (!cursor) return;
+            const value = cursor.value;
+            if (!value.ownerId) {
+              value.ownerId = GUEST_OWNER;
+              cursor.update(value);
+            }
+            cursor.continue();
+          };
+        }
       }
     };
   });
 }
 
-// SVG helper to generate a nice chess board image for demo seeding
-export function generateChessBoardSvg(theme: "tactics" | "mate" | "endgame"): string {
-  const isDark = (r: number, c: number) => (r + c) % 2 === 1;
-  const boardSize = 400;
-  const cellSize = boardSize / 8;
-  
-  let pieces: { r: number; c: number; text: string; color: string }[] = [];
-  
-  if (theme === "tactics") {
-    // Smothered Mate theme setup
-    pieces = [
-      { r: 0, c: 7, text: "♔", color: "white" }, // h8
-      { r: 0, c: 6, text: "♖", color: "white" }, // g8
-      { r: 1, c: 7, text: "♙", color: "white" }, // h7
-      { r: 1, c: 6, text: "♙", color: "white" }, // g7
-      { r: 1, c: 5, text: "♘", color: "black" }, // f7 (White Knight delivering mate)
-      { r: 4, c: 4, text: "♚", color: "black" }, // e4
-    ];
-  } else if (theme === "mate") {
-    // Back-rank mate setup
-    pieces = [
-      { r: 0, c: 3, text: "♚", color: "black" }, // d8
-      { r: 0, c: 2, text: "♖", color: "white" }, // c8 (Delivering mate)
-      { r: 1, c: 1, text: "♙", color: "black" }, // b7
-      { r: 1, c: 2, text: "♙", color: "black" }, // c7
-      { r: 1, c: 3, text: "♙", color: "black" }, // d7
-      { r: 7, c: 7, text: "♔", color: "white" }, // h1
-    ];
-  } else {
-    // King and Pawn endgame
-    pieces = [
-      { r: 3, c: 4, text: "♚", color: "black" }, // e5
-      { r: 4, c: 4, text: "♔", color: "white" }, // e4
-      { r: 3, c: 5, text: "♙", color: "white" }, // f5
-    ];
+// Re-exported so existing importers keep working after the move to demoData.ts
+export { generateChessBoardSvg } from "./demoData";
+
+/*
+ * Demo seeding is remembered per storage scope so the sample deck is only ever
+ * created once. Without this flag, deleting every deck instantly resurrected
+ * the demo data on the very next read.
+ */
+const SEED_FLAG_PREFIX = "chess_demo_seeded_v1:";
+
+export function hasSeededDemoData(scope: string): boolean {
+  try {
+    return localStorage.getItem(SEED_FLAG_PREFIX + scope) === "true";
+  } catch {
+    return false;
   }
-
-  let squaresSvg = "";
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const fill = isDark(r, c) ? "#B58863" : "#F0D9B5";
-      squaresSvg += `<rect x="${c * cellSize}" y="${r * cellSize}" width="${cellSize}" height="${cellSize}" fill="${fill}" />`;
-    }
-  }
-
-  // Draw some simple coordinates labels
-  let coordsSvg = "";
-  for (let i = 0; i < 8; i++) {
-    // files a-h
-    coordsSvg += `<text x="${i * cellSize + cellSize / 2}" y="${boardSize - 4}" font-size="10" font-family="sans-serif" fill="#4B5563" text-anchor="middle">${String.fromCharCode(97 + i)}</text>`;
-    // ranks 1-8
-    coordsSvg += `<text x="4" y="${i * cellSize + cellSize / 2 + 3}" font-size="10" font-family="sans-serif" fill="#4B5563">${8 - i}</text>`;
-  }
-
-  let piecesSvg = "";
-  pieces.forEach((p) => {
-    const x = p.c * cellSize + cellSize / 2;
-    const y = p.r * cellSize + cellSize / 2 + 14; // adjust baseline
-    const shadowColor = p.color === "white" ? "#000000" : "#ffffff";
-    const pieceColor = p.color === "white" ? "#ffffff" : "#111827";
-    piecesSvg += `
-      <text x="${x}" y="${y}" font-size="38" font-family="sans-serif" text-anchor="middle" fill="${pieceColor}" stroke="${shadowColor}" stroke-width="1.5">
-        ${p.text}
-      </text>
-    `;
-  });
-
-  const fullSvg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardSize} ${boardSize}" width="100%" height="100%">
-      <rect width="${boardSize}" height="${boardSize}" fill="#2D3748" rx="8" />
-      <g transform="translate(10, 10) scale(0.95)">
-        ${squaresSvg}
-        ${coordsSvg}
-        ${piecesSvg}
-      </g>
-    </svg>
-  `;
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(fullSvg)}`;
 }
 
-export async function seedDemoData(db: IDBDatabase): Promise<void> {
+export function markDemoDataSeeded(scope: string): void {
+  try {
+    localStorage.setItem(SEED_FLAG_PREFIX + scope, "true");
+  } catch {
+    /* Storage unavailable (private mode); seeding simply repeats next visit. */
+  }
+}
+
+export async function seedDemoData(db: IDBDatabase, ownerId: string): Promise<void> {
+  const defaultDeck = createDemoDeck(ownerId === GUEST_OWNER ? "" : `-${ownerId}`);
+  const demoCards = createDemoCards(defaultDeck.id, ownerId === GUEST_OWNER ? "" : `-${ownerId}`);
+
   const transaction = db.transaction(["decks", "cards"], "readwrite");
   const deckStore = transaction.objectStore("decks");
   const cardStore = transaction.objectStore("cards");
 
-  const defaultDeck: ChessDeck = {
-    id: "default-tactics",
-    name: "Mastering Tactical Themes",
-    description: "A collection of essential chess puzzles, checkmates, and tactical motifs.",
-    createdAt: Date.now(),
-  };
-
   await new Promise<void>((resolve, reject) => {
-    const req = deckStore.put(defaultDeck);
+    const req = deckStore.put({ ...defaultDeck, ownerId });
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 
-  const demoCards: ChessCard[] = [
-    {
-      id: "demo-card-1",
-      deckId: "default-tactics",
-      title: "The Philidor Smothered Mate",
-      imageUrl: generateChessBoardSvg("tactics"),
-      sideToMove: "White",
-      tacticalThemes: ["Smothered Mate", "Knight", "Double Check"],
-      frontText: "Look closely at the congested black king on h8. How does White deliver checkmate in 1 move?",
-      backText: "1. Nf7# (Knight to f7 checkmate)\n\nThe black king is completely surrounded ('smothered') by its own defenders (the rook on g8 and pawns on g7/h7). The knight jumps over to deliver a fatal checkmate. This is the classic Philidor mate mechanism!",
-      additionalNotes: "Always watch out for smothered mates when the enemy king is trapped in the corner. If the Rook was on f8, we would need a queen sacrifice first to force the rook onto g8.",
-      createdAt: Date.now() - 5000,
-      reviewCount: 0,
-      difficulty: "Medium",
-      lastReviewedAt: null,
-      mastered: false,
-    },
-    {
-      id: "demo-card-2",
-      deckId: "default-tactics",
-      title: "The Classic Back-Rank Weakness",
-      imageUrl: generateChessBoardSvg("mate"),
-      sideToMove: "White",
-      tacticalThemes: ["Back-Rank Mate", "Rook", "King Safety"],
-      frontText: "Black's king is tucked behind its pawns on the back rank. How can White exploit this setup immediately?",
-      backText: "1. Rc8# (Rook to c8 checkmate)\n\nBecause the black pawns on b7, c7, and d7 block the king from moving up to the 7th rank, the king has no escape square. White's rook delivers checkmate along the open 8th rank.",
-      additionalNotes: "Back-rank weakness is the most common tactical blunder for beginners and intermediate players alike. Always make 'luft' (air) for your king by moving a pawn (like g3/h3 or g6/h6) before entering complex endgames.",
-      createdAt: Date.now() - 4000,
-      reviewCount: 0,
-      difficulty: "Easy",
-      lastReviewedAt: null,
-      mastered: false,
-    },
-    {
-      id: "demo-card-3",
-      deckId: "default-tactics",
-      title: "King & Pawn Endgame: Opposing Kings",
-      imageUrl: generateChessBoardSvg("endgame"),
-      sideToMove: "White",
-      tacticalThemes: ["Opposition", "Endgame", "Pawn Promotion"],
-      frontText: "White to move. Should White play 1. Kd5 or does Black have defensive resources? How does 'Opposition' decide this game?",
-      backText: "1. Kd5!\n\nBy playing Kd5, White takes direct 'Opposition' against the black king. Since Black must move their king, they will have to step aside (e.g. to d6 or f6), allowing White's king to advance and shepherd the f5 pawn safely to promotion.",
-      additionalNotes: "Opposition means having kings on the same file, rank, or diagonal with an odd number of squares between them. The player who does NOT have to move holds the opposition and can break through.",
-      createdAt: Date.now() - 3000,
-      reviewCount: 0,
-      difficulty: "Hard",
-      lastReviewedAt: null,
-      mastered: false,
-    },
-  ];
-
   for (const card of demoCards) {
     await new Promise<void>((resolve, reject) => {
-      const req = cardStore.put(card);
+      const req = cardStore.put({ ...card, ownerId });
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
   }
 }
 
+/** Seed the sample deck on first launch only, per owner. */
+export async function ensureLocalDemoData(ownerId: string): Promise<void> {
+  const scope = `local:${ownerId}`;
+  if (hasSeededDemoData(scope)) return;
+  const db = await initDB();
+  const existing = await getDecks(ownerId);
+  if (existing.length === 0) {
+    await seedDemoData(db, ownerId);
+  }
+  markDemoDataSeeded(scope);
+}
+
 // Database query functions
-export async function getDecks(): Promise<ChessDeck[]> {
+export async function getDecks(ownerId: string): Promise<ChessDeck[]> {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("decks", "readonly");
-    const store = transaction.objectStore("decks");
-    const request = store.getAll();
+    const index = transaction.objectStore("decks").index("ownerId");
+    const request = index.getAll(IDBKeyRange.only(ownerId));
 
-    request.onsuccess = async () => {
-      let decks = request.result;
-      if (decks.length === 0) {
-        // Automatically seed demo data on first launch
-        await seedDemoData(db);
-        const retryTx = db.transaction("decks", "readonly");
-        const retryStore = retryTx.objectStore("decks");
-        const retryReq = retryStore.getAll();
-        retryReq.onsuccess = () => resolve(retryReq.result);
-        retryReq.onerror = () => reject(retryReq.error);
-      } else {
-        resolve(decks);
-      }
-    };
-
+    request.onsuccess = () => resolve((request.result as Owned<ChessDeck>[]).map(stripOwner));
     request.onerror = () => reject(request.error);
   });
 }
 
-export async function saveDeck(deck: ChessDeck): Promise<void> {
+export async function saveDeck(deck: ChessDeck, ownerId: string): Promise<void> {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("decks", "readwrite");
     const store = transaction.objectStore("decks");
-    const request = store.put(deck);
+    const request = store.put({ ...deck, ownerId });
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
@@ -234,7 +162,7 @@ export async function deleteDeck(deckId: string): Promise<void> {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(["decks", "cards"], "readwrite");
-    
+
     // Delete the deck
     const deckStore = transaction.objectStore("decks");
     deckStore.delete(deckId);
@@ -258,38 +186,31 @@ export async function deleteDeck(deckId: string): Promise<void> {
   });
 }
 
-export async function getCards(deckId?: string): Promise<ChessCard[]> {
+export async function getCards(ownerId: string, deckId?: string): Promise<ChessCard[]> {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("cards", "readonly");
     const store = transaction.objectStore("cards");
-    
-    if (deckId) {
-      const index = store.index("deckId");
-      const request = index.getAll(IDBKeyRange.only(deckId));
-      request.onsuccess = () => {
-        // Sort by creation time to ensure consistent ordering
-        const results = request.result.sort((a, b) => a.createdAt - b.createdAt);
-        resolve(results);
-      };
-      request.onerror = () => reject(request.error);
-    } else {
-      const request = store.getAll();
-      request.onsuccess = () => {
-        const results = request.result.sort((a, b) => a.createdAt - b.createdAt);
-        resolve(results);
-      };
-      request.onerror = () => reject(request.error);
-    }
+    // Always read through the owner index, then narrow by deck, so one
+    // account can never see another's cards.
+    const request = store.index("ownerId").getAll(IDBKeyRange.only(ownerId));
+
+    request.onsuccess = () => {
+      let results = (request.result as Owned<ChessCard>[]).map(stripOwner);
+      if (deckId) results = results.filter((card) => card.deckId === deckId);
+      // Sort by creation time to ensure consistent ordering
+      resolve(results.sort((a, b) => a.createdAt - b.createdAt));
+    };
+    request.onerror = () => reject(request.error);
   });
 }
 
-export async function saveCard(card: ChessCard): Promise<void> {
+export async function saveCard(card: ChessCard, ownerId: string): Promise<void> {
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("cards", "readwrite");
     const store = transaction.objectStore("cards");
-    const request = store.put(card);
+    const request = store.put({ ...card, ownerId });
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
@@ -315,13 +236,77 @@ export async function getCard(cardId: string): Promise<ChessCard | null> {
     const store = transaction.objectStore("cards");
     const request = store.get(cardId);
 
-    request.onsuccess = () => resolve(request.result || null);
+    request.onsuccess = () =>
+      resolve(request.result ? stripOwner(request.result as Owned<ChessCard>) : null);
     request.onerror = () => reject(request.error);
   });
 }
 
+/**
+ * Hand every deck and card owned by `fromOwner` over to `toOwner`. Used when
+ * someone who has been working as a guest registers a device account: the work
+ * moves with them instead of disappearing behind the new partition.
+ */
+export async function claimDeviceData(
+  fromOwner: string,
+  toOwner: string
+): Promise<{ decks: number; cards: number }> {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["decks", "cards"], "readwrite");
+    let decks = 0;
+    let cards = 0;
+
+    const reassign = (storeName: "decks" | "cards", onDone: () => void) => {
+      const store = transaction.objectStore(storeName);
+      const request = store.index("ownerId").openCursor(IDBKeyRange.only(fromOwner));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          onDone();
+          return;
+        }
+        cursor.update({ ...cursor.value, ownerId: toOwner });
+        if (storeName === "decks") decks += 1;
+        else cards += 1;
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error);
+    };
+
+    reassign("decks", () => reassign("cards", () => resolve({ decks, cards })));
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
 // Local User helpers for offline/fallback account storage
-import { LocalUser } from "../types";
+
+/**
+ * Passwords for the offline sandbox account are stored as a SHA-256 digest
+ * rather than plain text. Digests are prefixed so older plain-text records can
+ * still be recognised and upgraded on the next successful sign-in.
+ */
+const HASH_PREFIX = "sha256:";
+
+export async function hashPassword(password: string): Promise<string> {
+  if (!globalThis.crypto?.subtle) {
+    // Secure context unavailable; fall back to storing the raw value.
+    return password;
+  }
+  const bytes = new TextEncoder().encode(password);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  const hex = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return HASH_PREFIX + hex;
+}
+
+/** True when `password` matches a stored digest (or a legacy plain-text value). */
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (!stored) return false;
+  if (!stored.startsWith(HASH_PREFIX)) return stored === password;
+  return (await hashPassword(password)) === stored;
+}
 
 export async function saveLocalUser(user: LocalUser): Promise<void> {
   const db = await initDB();
@@ -346,4 +331,3 @@ export async function getLocalUser(email: string): Promise<LocalUser | null> {
     request.onerror = () => reject(request.error);
   });
 }
-
