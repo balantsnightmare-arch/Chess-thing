@@ -21,6 +21,7 @@ import {
   signUpWithEmailAndPassword,
   signInWithEmailAndPasswordHelper,
   logoutUser,
+  signInWithGoogle,
   getDecksFromFirestore,
   getCardsFromFirestore,
   saveDeckToFirestore,
@@ -348,6 +349,21 @@ export default function App() {
         }
         throw err;
       }
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    // A stored device-only session outranks Firebase auth state, so it has to
+    // go before the popup or the sign-in would appear to do nothing.
+    localStorage.removeItem(LOCAL_USER_KEY);
+    setCloudUpgrade(null);
+    setIsLoading(true);
+    try {
+      await signInWithGoogle();
+      // onAuthStateChanged takes it from here.
+    } catch (err) {
+      setIsLoading(false);
+      throw err;
     }
   };
 
@@ -851,6 +867,7 @@ export default function App() {
         cloudUpgradeNotice={cloudUpgrade !== null}
         onSignUp={handleSignUp}
         onSignIn={handleSignIn}
+        onGoogleSignIn={handleGoogleSignIn}
       />
     </div>
   );
