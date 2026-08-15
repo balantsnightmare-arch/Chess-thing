@@ -38,13 +38,14 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
   );
   const [phraseInput, setPhraseInput] = useState("");
   const [title, setTitle] = useState(cardToEdit?.title || "");
-  const [sideToMove, setSideToMove] = useState<"White" | "Black" | "Unknown">(cardToEdit?.sideToMove || "White");
+  // "" means the field is left unset, so a card that does not need it shows nothing.
+  const [sideToMove, setSideToMove] = useState<"" | "White" | "Black" | "Unknown">(cardToEdit?.sideToMove ?? "");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>(cardToEdit?.tacticalThemes || []);
   const [frontText, setFrontText] = useState(cardToEdit?.frontText || "");
   const [backText, setBackText] = useState(cardToEdit?.backText || "");
   const [additionalNotes, setAdditionalNotes] = useState(cardToEdit?.additionalNotes || "");
-  const [difficulty, setDifficulty] = useState<"Easy" | "Medium" | "Hard">(cardToEdit?.difficulty || "Medium");
+  const [difficulty, setDifficulty] = useState<"" | "Easy" | "Medium" | "Hard">(cardToEdit?.difficulty ?? "");
 
   // AI loading state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -198,7 +199,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       return;
     }
     if (!title.trim()) {
-      setFormError("Please give the flashcard a title.");
+      setFormError("Please give the card a title.");
       return;
     }
 
@@ -208,12 +209,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       // Kept in sync with the first image so list thumbnails and AI analysis work.
       imageUrl: firstImage,
       items,
-      sideToMove,
+      sideToMove: sideToMove || undefined,
       tacticalThemes: tags,
       frontText: frontText.trim(),
       backText: backText.trim(),
       additionalNotes: additionalNotes.trim(),
-      difficulty,
+      difficulty: difficulty || undefined,
     };
 
     const size = estimateCardBytes(draft);
@@ -233,12 +234,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       <div className="flex justify-between items-start pb-5 border-b border-slate-100">
         <div>
           <h3 className="font-display font-extrabold text-2xl text-slate-900 flex items-center gap-2">
-            {cardToEdit ? "Edit Chess Flashcard" : "Create Chess Flashcard"}
+            {cardToEdit ? "Edit Card" : "Create Card"}
           </h3>
           <p className="text-sm text-slate-500 font-sans mt-1">
             {cardToEdit
-              ? "Modify details of your chess study card."
-              : "Add one or more pictures and phrases, then write the solution."}
+              ? "Modify the details of this card."
+              : "Add one or more pictures and phrases, then write the answer."}
           </p>
         </div>
 
@@ -464,12 +465,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           {/* Title */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Flashcard Title *
+              Card Title *
             </label>
             <input
               type="text"
               required
-              placeholder="e.g. Back-Rank Weakness, Philidor Smothered Mate"
+              placeholder="e.g. Photosynthesis, or Spanish: to run"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans"
@@ -480,13 +481,14 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             {/* Side to Play */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Side to Play
+                Side to Play (optional)
               </label>
               <select
                 value={sideToMove}
                 onChange={(e) => setSideToMove(e.target.value as any)}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans bg-white"
               >
+                <option value="">Not specified</option>
                 <option value="White">White to Play</option>
                 <option value="Black">Black to Play</option>
                 <option value="Unknown">Unknown / Setup</option>
@@ -496,13 +498,14 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             {/* Difficulty */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Difficulty
+                Difficulty (optional)
               </label>
               <select
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value as any)}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans bg-white"
               >
+                <option value="">Not specified</option>
                 <option value="Easy">Easy</option>
                 <option value="Medium">Medium</option>
                 <option value="Hard">Hard</option>
@@ -510,10 +513,10 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             </div>
           </div>
 
-          {/* Tactical Themes / Tag input */}
+          {/* Tags */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Tactical Themes (Tags)
+              Tags
             </label>
             <div className="border border-slate-200 rounded-xl p-2 focus-within:ring-2 focus-within:ring-amber-400 focus-within:border-amber-400 bg-white">
               <div className="flex flex-wrap gap-1.5 mb-1.5">
@@ -543,7 +546,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
               />
             </div>
             <span className="text-[10px] text-slate-400 font-sans mt-1 block">
-              Examples: Pin, Fork, Double Check, Skewer, Deflection, Endgame
+              Examples: Vocabulary, Formulas, Chapter 3, Weak Spots
             </span>
           </div>
 
@@ -555,7 +558,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             </label>
             <textarea
               rows={3}
-              placeholder="e.g. Find the winning knight sacrifice. What are White's threats?"
+              placeholder="e.g. What does this term mean?"
               value={frontText}
               onChange={(e) => setFrontText(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans resize-none"
@@ -565,12 +568,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           {/* BACK TEXT: Answer/Solution */}
           <div>
             <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex justify-between">
-              <span>Card Back (Solution/Answer)</span>
+              <span>Card Back (Answer)</span>
               <span className="text-[10px] text-slate-400 uppercase">Shown with the other prompts</span>
             </label>
             <textarea
               rows={3}
-              placeholder="e.g. 1. Nxf7+! Rxf7 2. Qxe8+ winning back-rank material checkmate."
+              placeholder="e.g. The answer, plus any working or explanation."
               value={backText}
               onChange={(e) => setBackText(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans resize-none"
@@ -580,11 +583,11 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           {/* ADDITIONAL NOTES */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Additional Notes (Coaching tips & annotations)
+              Additional Notes (hints & context)
             </label>
             <textarea
               rows={3}
-              placeholder="Add strategic guidelines, chess history, or mental safety rules for study cards..."
+              placeholder="Add hints, mnemonics, or extra context..."
               value={additionalNotes}
               onChange={(e) => setAdditionalNotes(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans resize-none"

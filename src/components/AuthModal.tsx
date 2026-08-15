@@ -158,10 +158,10 @@ export default function AuthModal({
             </svg>
           </div>
           <h3 className="font-display font-black text-xl text-slate-900 tracking-tight">
-            {isSignUpTab ? "Create Your Chess Account" : "Welcome Back"}
+            {isSignUpTab ? "Create Your Account" : "Welcome Back"}
           </h3>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            {isSignUpTab ? "Join now to sync your tactical training cards" : "Sign in to access your saved chess decks"}
+            {isSignUpTab ? "Join now to sync your cards across devices" : "Sign in to access your saved decks"}
           </p>
         </div>
 
@@ -254,7 +254,7 @@ export default function AuthModal({
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g. Garry Kasparov"
+                  placeholder="e.g. Alex Morgan"
                   className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl py-3 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition"
                   disabled={isLoading}
                 />

@@ -45,9 +45,9 @@ export default function Navbar({
           </div>
           <div>
             <h1 id="app-title" className="font-display font-bold text-lg sm:text-xl text-slate-900 tracking-tight flex items-center gap-1.5">
-              Chess Cards <span className="text-[10px] sm:text-xs bg-amber-100 text-amber-800 font-sans font-medium px-2 py-0.5 rounded-full">Cloud</span>
+              Study Cards <span className="text-[10px] sm:text-xs bg-amber-100 text-amber-800 font-sans font-medium px-2 py-0.5 rounded-full">Cloud</span>
             </h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 font-sans">Learn tactical chess setups with AI</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-sans">Build and review your own flashcards</p>
           </div>
         </div>
 
@@ -102,7 +102,7 @@ export default function Navbar({
                   </div>
                 )}
                 <div className="hidden sm:block text-left">
-                  <p className="text-xs font-bold text-slate-800 line-clamp-1 leading-tight">{user.displayName || "Chess Master"}</p>
+                  <p className="text-xs font-bold text-slate-800 line-clamp-1 leading-tight">{user.displayName || "Signed in"}</p>
                   <p className="text-[10px] text-slate-500 line-clamp-1">{user.email}</p>
                 </div>
                 <button

@@ -1,7 +1,7 @@
 {
-  "name": "Chess Flashcards",
-  "short_name": "Chess Cards",
-  "description": "Create, analyse and practise interactive chess flashcards from board positions and phrases.",
+  "name": "Flashcards",
+  "short_name": "Study Cards",
+  "description": "Create and practise interactive flashcards from pictures and phrases.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

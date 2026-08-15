@@ -628,7 +628,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
             <Loader2 className="w-10 h-10 text-slate-700 animate-spin" />
             <p className="text-sm font-semibold text-slate-500 font-sans animate-pulse">
-              Initialising database &amp; loading chess flashcards...
+              Initialising database &amp; loading your cards...
             </p>
           </div>
         ) : (
@@ -725,7 +725,7 @@ export default function App() {
                   <div>
                     <h4 className="font-display font-extrabold text-sm text-slate-100">Guest Mode (Offline Only)</h4>
                     <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                      Your chess flashcards are stored locally on this device. Sign in or register a free account to enable cloud sync, preserve your mastery progress, and access your decks from anywhere.
+                      Your cards are stored locally on this device. Sign in or register a free account to enable cloud sync, preserve your mastery progress, and access your decks from anywhere.
                     </p>
                   </div>
                 </div>
@@ -847,7 +847,7 @@ export default function App() {
           <p className="flex items-center gap-1">
             <span>Crafted in AI Studio</span>
             <span>•</span>
-            <span className="text-slate-500 font-medium">Chess Study Deck Manager</span>
+            <span className="text-slate-500 font-medium">Study Deck Manager</span>
           </p>
           <p className="text-[11px] text-slate-400">
             Powered by Gemini Multimodal Analysis &amp; Google Cloud Firestore Sync

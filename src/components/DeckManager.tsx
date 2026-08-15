@@ -64,7 +64,7 @@ export default function DeckManager({
     const dataStr = JSON.stringify({ decks, cards }, null, 2);
     const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
     
-    const exportFileDefaultName = `chess-flashcards-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const exportFileDefaultName = `flashcards-backup-${new Date().toISOString().split('T')[0]}.json`;
     
     const linkElement = document.createElement("a");
     linkElement.setAttribute("href", dataUri);
@@ -119,10 +119,10 @@ export default function DeckManager({
             <Sparkles className="w-3 h-3 animate-spin-slow" /> Powered by Gemini AI
           </span>
           <h2 className="font-display font-extrabold text-2xl sm:text-4xl text-slate-50 mt-3 tracking-tight leading-tight">
-            Level up your chess memory.
+            Level up your memory.
           </h2>
           <p className="text-slate-300 text-sm mt-2 leading-relaxed font-sans">
-            Snap chess positions, write notes, and let Gemini automatically analyze moves and draft interactive Quizlet-style cards. Double your learning speed with 3D cards and tactical category tracking.
+            Add pictures and phrases, write notes, and build interactive Quizlet-style cards. Double your learning speed with 3D flip cards and topic tracking.
           </p>
           
           <div className="flex flex-wrap gap-3 mt-6">
@@ -269,7 +269,7 @@ export default function DeckManager({
               Add New Deck
             </span>
             <span className="text-xs text-slate-400 font-sans mt-1">
-              Organize cards by game stage, rating, or themes
+              Organize cards by subject, level, or theme
             </span>
           </div>
         </button>
@@ -289,10 +289,10 @@ export default function DeckManager({
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
             <h3 className="font-display font-extrabold text-xl text-slate-900">
-              Create Chess Study Deck
+              Create Study Deck
             </h3>
             <p className="text-xs text-slate-500 font-sans mt-1">
-              Group similar tactical puzzles or endgame setups to focus your learning.
+              Group related cards together to focus your learning.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -303,7 +303,7 @@ export default function DeckManager({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Knight Forks & Pins, Rook Endgames"
+                  placeholder="e.g. Spanish Vocabulary, Biology Terms"
                   value={newDeckName}
                   onChange={(e) => setNewDeckName(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 font-sans"

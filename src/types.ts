@@ -20,14 +20,16 @@ export interface ChessCard {
    * multi-item support still load (see getCardItems in lib/cards.ts).
    */
   items?: CardItem[];
-  sideToMove: "White" | "Black" | "Unknown";
+  /** Optional. Unset means the card does not use this field. */
+  sideToMove?: "White" | "Black" | "Unknown";
   tacticalThemes: string[];
   frontText: string; // Prompt / Question
   backText: string;  // Answer / Solution
   additionalNotes: string;
   createdAt: number;
   reviewCount: number;
-  difficulty: "Easy" | "Medium" | "Hard";
+  /** Optional. Unset means the card does not use this field. */
+  difficulty?: "Easy" | "Medium" | "Hard";
   lastReviewedAt: number | null;
   mastered: boolean;
 }

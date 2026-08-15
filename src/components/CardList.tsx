@@ -117,7 +117,7 @@ export default function CardList({
           </h2>
 
           <p className="text-slate-500 text-sm max-w-xl leading-relaxed font-sans">
-            {deck.description || "Study your custom uploaded chess positions and solutions."}
+            {deck.description || "Study the cards you have added to this deck."}
           </p>
 
           <div className="flex items-center space-x-3 text-xs text-slate-400 font-medium pt-1.5">
@@ -134,7 +134,7 @@ export default function CardList({
             className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold py-2.5 px-4 rounded-xl transition flex items-center space-x-1.5 border border-slate-200/60 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Chess Card</span>
+            <span>Add Card</span>
           </button>
 
           <button
@@ -143,7 +143,7 @@ export default function CardList({
             className="bg-amber-400 hover:bg-amber-500 disabled:bg-slate-100 text-slate-950 disabled:text-slate-400 text-xs sm:text-sm font-bold py-2.5 px-6 rounded-xl transition flex items-center space-x-2 shadow-lg shadow-amber-400/10 cursor-pointer disabled:cursor-not-allowed"
           >
             <GraduationCap className="w-4.5 h-4.5" />
-            <span>Study Flashcards</span>
+            <span>Study Cards</span>
           </button>
         </div>
       </div>
@@ -263,14 +263,16 @@ export default function CardList({
                       </span>
                     ) : null}
 
-                    {/* Difficulty Tag */}
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      card.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
-                      card.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
-                      "bg-rose-50 text-rose-700"
-                    }`}>
-                      {card.difficulty}
-                    </span>
+                    {/* Difficulty Tag (only when the card sets one) */}
+                    {card.difficulty && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        card.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
+                        card.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
+                        "bg-rose-50 text-rose-700"
+                      }`}>
+                        {card.difficulty}
+                      </span>
+                    )}
 
                     {/* Preview Themes tags */}
                     {card.tacticalThemes.slice(0, 2).map((tag) => (
@@ -288,7 +290,7 @@ export default function CardList({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`Are you sure you want to delete this chess card "${card.title}"?`)) {
+                    if (confirm(`Are you sure you want to delete the card "${card.title}"?`)) {
                       onDeleteCard(card.id);
                     }
                   }}
@@ -307,13 +309,13 @@ export default function CardList({
           <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-4 animate-pulse" />
           <h4 className="font-display font-extrabold text-lg text-slate-800">No cards in this deck view</h4>
           <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-            Try creating your first chess card using picture upload and Gemini AI automatic analysis!
+            Create your first card using pictures, phrases, or both.
           </p>
           <button
             onClick={onAddCard}
             className="mt-6 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold py-2.5 px-6 rounded-xl transition cursor-pointer"
           >
-            Create First Chess Card
+            Create First Card
           </button>
         </div>
       )}
@@ -342,13 +344,15 @@ export default function CardList({
                 </h3>
 
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    previewCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
-                    previewCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
-                    "bg-rose-50 text-rose-700"
-                  }`}>
-                    {previewCard.difficulty} Difficulty
-                  </span>
+                  {previewCard.difficulty && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      previewCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
+                      previewCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
+                      "bg-rose-50 text-rose-700"
+                    }`}>
+                      {previewCard.difficulty} Difficulty
+                    </span>
+                  )}
 
                   {previewCard.sideToMove === "White" ? (
                     <span className="bg-slate-100 border border-slate-200 text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
@@ -456,7 +460,7 @@ export default function CardList({
                       {previewCard.backText && (
                         <div className="bg-amber-400/5 border border-amber-400/10 rounded-xl p-3">
                           <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest block mb-1">
-                            Best Moves / Explanation
+                            Answer
                           </span>
                           <p className="text-slate-100 text-xs sm:text-sm font-semibold font-sans whitespace-pre-line leading-relaxed">
                             {previewCard.backText}
@@ -468,7 +472,7 @@ export default function CardList({
                       {previewCard.additionalNotes && (
                         <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
                           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest block mb-1">
-                            Grandmaster Study Tips
+                            Notes
                           </span>
                           <p className="text-slate-300 text-[11px] font-sans whitespace-pre-line leading-relaxed">
                             {previewCard.additionalNotes}
@@ -537,7 +541,7 @@ export default function CardList({
 
                   <button
                     onClick={() => {
-                      if (confirm(`Are you sure you want to delete this chess card "${previewCard.title}"?`)) {
+                      if (confirm(`Are you sure you want to delete the card "${previewCard.title}"?`)) {
                         onDeleteCard(previewCard.id);
                         handleClosePreview();
                       }

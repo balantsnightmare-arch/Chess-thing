@@ -168,7 +168,7 @@ export default function StudySession({
         <HelpCircle className="w-16 h-16 text-slate-300 mb-4 animate-bounce" />
         <h3 className="font-display font-extrabold text-xl text-slate-800">No cards in this deck</h3>
         <p className="text-sm text-slate-500 mt-2 max-w-sm">
-          You need to add at least one chess position card to this deck to start studying it.
+          You need to add at least one card to this deck to start studying it.
         </p>
         <button
           onClick={onClose}
@@ -263,19 +263,21 @@ export default function StudySession({
                         <span className="w-2.5 h-2.5 bg-black border border-slate-600 rounded-full inline-block" />
                         Black to Play
                       </span>
-                    ) : (
+                    ) : currentCard.sideToMove === "Unknown" ? (
                       <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1 rounded-lg">
                         Setup Position
                       </span>
-                    )}
+                    ) : null}
 
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      currentCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
-                      currentCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
-                      "bg-rose-50 text-rose-700"
-                    }`}>
-                      {currentCard.difficulty}
-                    </span>
+                    {currentCard.difficulty && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                        currentCard.difficulty === "Easy" ? "bg-emerald-50 text-emerald-700" :
+                        currentCard.difficulty === "Medium" ? "bg-amber-50 text-amber-700" :
+                        "bg-rose-50 text-rose-700"
+                      }`}>
+                        {currentCard.difficulty}
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-slate-400 flex items-center space-x-1 text-xs">
@@ -330,7 +332,7 @@ export default function StudySession({
                         Question / Study Prompt
                       </div>
                       <p className="text-slate-700 text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
-                        {currentCard.frontText || "Find the best continuation in this position."}
+                        {currentCard.frontText || "What is the answer?"}
                       </p>
                     </div>
 
@@ -365,11 +367,11 @@ export default function StudySession({
                 <div className="flex justify-between items-center pb-3 border-b border-slate-800/80 relative z-10">
                   <div className="flex items-center space-x-2 text-amber-400">
                     <Zap className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Solution / Analysis</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">Answer</span>
                   </div>
 
                   <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-2 py-0.5 rounded font-mono font-medium">
-                    Grandmaster Annotations
+                    Card Back
                   </span>
                 </div>
 
@@ -394,7 +396,7 @@ export default function StudySession({
                   {currentCard.backText && (
                     <div className="bg-amber-400/5 border border-amber-400/15 rounded-2xl p-4">
                       <h5 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5" /> Best Continuation
+                        <CheckCircle className="w-3.5 h-3.5" /> Answer
                       </h5>
                       <p className="text-slate-100 font-semibold text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
                         {currentCard.backText}
@@ -406,7 +408,7 @@ export default function StudySession({
                   {currentCard.additionalNotes && (
                     <div className="bg-slate-900 border border-slate-800/60 rounded-2xl p-4">
                       <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                        <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Coaching Notes & Themes
+                        <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Notes
                       </h5>
                       <p className="text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-sans">
                         {currentCard.additionalNotes}
@@ -489,7 +491,7 @@ export default function StudySession({
             </h3>
 
             <p className="text-sm text-slate-500 font-sans">
-              Excellent job reviewing your chess flashcards. Testing your recall is the best way to wire tactical patterns into your subconscious memory!
+Excellent job reviewing your cards. Testing your recall is the most reliable way to commit things to memory.
             </p>
 
             {/* Run Stats */}
