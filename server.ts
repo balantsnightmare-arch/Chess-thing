@@ -8,7 +8,9 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  // Cloud Run (and most container hosts) inject the port to listen on and
+  // kill the container if nothing binds to it. Fall back to 3000 locally.
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Configure body parser to allow uploading base64 chess images
   app.use(express.json({ limit: "50mb" }));
