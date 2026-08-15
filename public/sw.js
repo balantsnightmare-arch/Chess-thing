@@ -59,7 +59,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/")) {
+  if (url.pathname.startsWith("/assets/")) {
     event.respondWith(
       (async () => {
         const cached = await caches.match(request);
