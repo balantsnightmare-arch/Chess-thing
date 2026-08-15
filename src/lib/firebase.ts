@@ -64,9 +64,13 @@ function createDb() {
       { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
       dbId
     );
-  } catch (err) {
-    // Private browsing / unsupported storage: fall back to memory-only.
-    console.warn("Firestore offline persistence unavailable, using memory cache:", err);
+  } catch (err: any) {
+    // Already initialised (module re-evaluated, e.g. by HMR): getFirestore
+    // hands back the existing instance, persistent cache and all.
+    if (err?.code !== "failed-precondition") {
+      // Private browsing / unsupported storage: this one really is memory-only.
+      console.warn("Firestore offline persistence unavailable, using memory cache:", err);
+    }
     return getFirestore(app, dbId);
   }
 }
