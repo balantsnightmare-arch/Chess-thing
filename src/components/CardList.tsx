@@ -257,8 +257,14 @@ export default function CardList({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredCards.map((card) => {
             const itemCount = getCardItems(card).length;
-            const thumbnail = getPrimaryImage(card);
-            const thumbnailText = getPrimaryText(card);
+            // Swapped decks put every picture and phrase on the back, so the
+            // tile shows the answer instead of giving the prompt away.
+            const thumbnail = isSwapped ? "" : getPrimaryImage(card);
+            const thumbnailText = isSwapped ? card.backText : getPrimaryText(card);
+            const coverTitle = getCardTitle(card, isSwapped);
+            const coverText = isSwapped
+              ? card.backText
+              : card.frontText || getPrimaryText(card);
 
             return (
               <div
@@ -272,7 +278,7 @@ export default function CardList({
                     <div className="w-20 h-20 bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
                       <img
                         src={thumbnail}
-                        alt={getCardTitle(card)}
+                        alt={coverTitle}
                         className="w-full h-full object-contain"
                       />
                     </div>
@@ -286,7 +292,7 @@ export default function CardList({
                     </div>
                   )}
 
-                  {itemCount > 1 && (
+                  {!isSwapped && itemCount > 1 && (
                     <span
                       className="absolute -top-1.5 -right-1.5 bg-slate-900 text-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-slate-700 flex items-center gap-0.5 shadow-sm"
                       title={`${itemCount} prompts — one is drawn at random`}
@@ -300,7 +306,7 @@ export default function CardList({
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="font-display font-bold text-sm sm:text-base text-slate-900 truncate group-hover:text-amber-800 transition-colors">
-                      {getCardTitle(card)}
+                      {coverTitle}
                     </h4>
 
                     {/* Mastered / Need Review Status Checkmark (Interactive Toggle) */}
@@ -322,7 +328,7 @@ export default function CardList({
                   </div>
 
                   <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {card.frontText || thumbnailText || "Open this card to draw a prompt."}
+                    {coverText || "Open this card to draw a prompt."}
                   </p>
 
                   <div className="flex flex-wrap gap-1.5 items-center">
@@ -364,7 +370,7 @@ export default function CardList({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`Are you sure you want to delete the card "${getCardTitle(card)}"?`)) {
+                    if (confirm(`Are you sure you want to delete the card "${coverTitle}"?`)) {
                       onDeleteCard(card.id);
                     }
                   }}
@@ -396,8 +402,8 @@ export default function CardList({
 
       {/* Card Preview Modal Popup */}
       {previewCard && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative max-h-[95vh] overflow-y-auto no-scrollbar flex flex-col justify-between">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-4 sm:p-8 max-w-md w-full shadow-2xl relative max-h-[100dvh] sm:max-h-[95dvh] flex flex-col overflow-hidden">
 
             {/* Modal Close Button */}
             <button
@@ -407,14 +413,14 @@ export default function CardList({
               <X className="w-4 h-4" />
             </button>
 
-            <div className="space-y-4">
+            <div className="flex flex-col min-h-0 flex-1 gap-3">
               {/* Header */}
-              <div>
+              <div className="shrink-0">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
                   Interactive Flashcard Preview
                 </span>
                 <h3 className="font-display font-extrabold text-xl text-slate-900 leading-tight pr-8">
-                  {getCardTitle(previewCard)}
+                  {getCardTitle(previewCard, isSwapped)}
                 </h3>
 
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -447,10 +453,10 @@ export default function CardList({
               </div>
 
               {/* Interactive Flippable Card Container */}
-              <div className="perspective-1000 w-full min-h-[380px] relative">
+              <div className="perspective-1000 w-full flex-1 min-h-[240px] relative">
                 <div
                   onClick={() => setIsPreviewFlipped(!isPreviewFlipped)}
-                  className={`w-full h-full min-h-[380px] transition-transform duration-500 preserve-3d cursor-pointer rounded-2xl ${
+                  className={`w-full h-full transition-transform duration-500 preserve-3d cursor-pointer rounded-2xl ${
                     isPreviewFlipped ? "rotate-y-180" : ""
                   }`}
                 >
@@ -463,10 +469,10 @@ export default function CardList({
                     </div>
 
                     {/* Front Body (randomly drawn prompt & question) */}
-                    <div className="my-auto space-y-3">
-                      <div className="max-w-[200px] mx-auto w-full">
+                    <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar my-auto space-y-3 py-2">
+                      <div className="max-w-[150px] sm:max-w-[200px] mx-auto w-full">
                         {frontItem ? (
-                          <PromptItemView item={frontItem} alt={getCardTitle(previewCard)} compact />
+                          <PromptItemView item={frontItem} alt={getCardTitle(previewCard, isSwapped)} compact />
                         ) : (
                           <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-[11px] text-slate-400 text-center p-4">
                             {isSwapped ? "This card has no answer to show." : "This card has no prompts yet."}
@@ -515,7 +521,7 @@ export default function CardList({
                     </div>
 
                     {/* Back Body (remaining prompts, solution & coaching notes) */}
-                    <div className="my-auto space-y-3 overflow-y-auto max-h-[220px] no-scrollbar pr-1">
+                    <div className="flex-1 min-h-0 my-auto space-y-3 overflow-y-auto no-scrollbar pr-1 py-2">
                       {/* Everything that was not drawn for the front */}
                       {backItems.length > 0 && (
                         <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
@@ -578,7 +584,7 @@ export default function CardList({
               </div>
 
               {/* Quick Actions */}
-              <div className="flex flex-col gap-3 pt-3 border-t border-slate-100">
+              <div className="shrink-0 flex flex-col gap-2 pt-3 border-t border-slate-100">
                 {/* Move through the deck without closing */}
                 <div className="flex items-center gap-2">
                   <button
@@ -609,13 +615,13 @@ export default function CardList({
                 {/* Large Close Preview Button */}
                 <button
                   onClick={handleClosePreview}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white text-base font-extrabold py-3.5 rounded-2xl transition cursor-pointer text-center shadow-lg"
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm sm:text-base font-extrabold py-3 rounded-2xl transition cursor-pointer text-center shadow-lg"
                 >
                   Close Preview
                 </button>
 
                 {/* Smaller, Secondary Actions */}
-                <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => onToggleMastered(previewCard.id)}
                     className={`text-[10px] sm:text-xs font-bold py-2 rounded-xl transition cursor-pointer flex flex-col items-center justify-center gap-1.5 border ${

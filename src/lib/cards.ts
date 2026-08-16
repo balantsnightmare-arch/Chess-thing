@@ -44,7 +44,17 @@ export function getPrimaryImage(card: CardLike): string {
  * card's first phrase and finally to a neutral placeholder, rather than
  * rendering an empty heading.
  */
-export function getCardTitle(card: CardLike & { title?: string }): string {
+export function getCardTitle(
+  card: CardLike & { title?: string; backText?: string },
+  swapped = false
+): string {
+  // When the deck is swapped the answer is the front, so the heading has to
+  // follow it. Otherwise the list and the preview header would spoil the very
+  // thing the card is now asking you to recall.
+  if (swapped) {
+    const answer = (card.backText ?? "").trim();
+    if (answer) return answer.length > 60 ? `${answer.slice(0, 57)}...` : answer;
+  }
   const title = (card.title ?? "").trim();
   if (title) return title;
   const firstText = getPrimaryText(card).trim();

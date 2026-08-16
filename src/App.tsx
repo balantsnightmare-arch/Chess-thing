@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { ChessCard, ChessDeck, AuthUser, LocalUser } from "./types";
 import {
   getDecks,
@@ -45,6 +45,25 @@ import { Loader2, Sparkles, AlertTriangle, CloudUpload, Check } from "lucide-rea
 
 const LOCAL_USER_KEY = "chess_local_user";
 const SWAPPED_DECKS_KEY = "chess_swapped_decks";
+const LAST_PLACE_KEY = "chess_last_place";
+
+/**
+ * Where the user was when they last closed the app, so reopening drops them
+ * back into the deck rather than the deck list.
+ */
+type LastPlace = { view: "decks" | "deck-view"; deckId: string | null };
+
+function readLastPlace(): LastPlace | null {
+  try {
+    const raw = localStorage.getItem(LAST_PLACE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LastPlace;
+    if (parsed?.view === "deck-view" && typeof parsed.deckId === "string") return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /** Which decks are being studied back-to-front. */
 function readSwappedDecks(): Record<string, boolean> {
@@ -102,6 +121,8 @@ export default function App() {
     { mode: "upload" | "claim"; decks: ChessDeck[]; cards: ChessCard[] } | null
   >(null);
   const [swappedDecks, setSwappedDecks] = useState<Record<string, boolean>>(readSwappedDecks);
+  // Consumed once, after decks load, so a deleted deck cannot strand the user.
+  const pendingRestore = useRef<LastPlace | null>(readLastPlace());
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationDone, setMigrationDone] = useState<string | null>(null);
 
@@ -389,6 +410,12 @@ export default function App() {
       setMigrationDone(null);
       setPendingLocalData(null);
       setErrorMessage(null);
+      pendingRestore.current = null;
+      try {
+        localStorage.removeItem(LAST_PLACE_KEY);
+      } catch {
+        /* ignore */
+      }
       if (user?.isLocal) {
         setUser(null);
         loadData(null);
@@ -627,6 +654,32 @@ export default function App() {
       setErrorMessage("Failed to import that backup. Ensure the JSON format is correct.");
     }
   };
+
+  // Reopen where the user left off, but only if that deck still exists.
+  useEffect(() => {
+    const target = pendingRestore.current;
+    if (!target || isLoading) return;
+    pendingRestore.current = null;
+    if (target.deckId && decks.some((d) => d.id === target.deckId)) {
+      setSelectedDeckId(target.deckId);
+      setActiveView("deck-view");
+    }
+  }, [decks, isLoading]);
+
+  // Remember the current spot. Half-finished work (the creator) and an active
+  // study run are deliberately not restored; both resume at the deck.
+  useEffect(() => {
+    if (isLoading) return;
+    const place: LastPlace =
+      activeView === "decks" || !selectedDeckId
+        ? { view: "decks", deckId: null }
+        : { view: "deck-view", deckId: selectedDeckId };
+    try {
+      localStorage.setItem(LAST_PLACE_KEY, JSON.stringify(place));
+    } catch {
+      /* Storage unavailable; the app just always opens on the deck list. */
+    }
+  }, [activeView, selectedDeckId, isLoading]);
 
   // Navigation Helpers
   const selectedDeck = decks.find((d) => d.id === selectedDeckId);

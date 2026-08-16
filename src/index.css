@@ -37,9 +37,16 @@
  * Animations referenced throughout the UI. Without these keyframes the
  * animate-fade-in / animate-shake / animate-spin-slow classes were inert.
  */
+/*
+ * Opacity only, deliberately. A transform here (even translateY(0)) persists
+ * because of animation-fill-mode and turns the animated element into the
+ * containing block for every position:fixed descendant, which pushed the
+ * card preview and auth dialogs off-screen instead of centring them on the
+ * viewport.
+ */
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes shake {
