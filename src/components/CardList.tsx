@@ -138,6 +138,17 @@ export default function CardList({
     setPreviewPromptIndex(pickRandomIndex(getCardItems(next).length));
   };
 
+  // Keep the list behind the dialog still while it is open, which on a phone
+  // otherwise scrolls under your finger when you mean to swipe the card.
+  useEffect(() => {
+    if (!previewCardId) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [previewCardId]);
+
   // Arrow keys move between cards, Escape closes, while the preview is open.
   const filteredIds = filteredCards.map((c) => c.id).join("|");
   useEffect(() => {
@@ -403,7 +414,12 @@ export default function CardList({
       {/* Card Preview Modal Popup */}
       {previewCard && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-3xl p-4 sm:p-8 max-w-md w-full shadow-2xl relative max-h-[100dvh] sm:max-h-[95dvh] flex flex-col overflow-hidden">
+          <div /*
+             * A definite height on phones, so flex-1 has slack to give the card
+             * instead of the dialog shrink-wrapping to its content. Desktop
+             * keeps sizing to content.
+             */
+            className="bg-white rounded-3xl p-4 sm:p-8 max-w-md w-full shadow-2xl relative h-[92dvh] sm:h-auto max-h-[92dvh] sm:max-h-[95dvh] flex flex-col overflow-hidden">
 
             {/* Modal Close Button */}
             <button
@@ -453,10 +469,16 @@ export default function CardList({
               </div>
 
               {/* Interactive Flippable Card Container */}
-              <div className="perspective-1000 w-full flex-1 min-h-[240px] relative">
+              <div className="perspective-1000 w-full flex-1 min-h-[240px] sm:min-h-[380px] relative">
                 <div
                   onClick={() => setIsPreviewFlipped(!isPreviewFlipped)}
-                  className={`w-full h-full transition-transform duration-500 preserve-3d cursor-pointer rounded-2xl ${
+                  /*
+                   * Positioned rather than sized with h-full: the stage takes
+                   * its height from flex-1, which is not a definite height for
+                   * percentage resolution, and both faces are absolute, so
+                   * this element would otherwise collapse to zero height.
+                   */
+                  className={`absolute inset-0 transition-transform duration-500 preserve-3d cursor-pointer rounded-2xl ${
                     isPreviewFlipped ? "rotate-y-180" : ""
                   }`}
                 >
@@ -470,7 +492,7 @@ export default function CardList({
 
                     {/* Front Body (randomly drawn prompt & question) */}
                     <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar my-auto space-y-3 py-2">
-                      <div className="max-w-[150px] sm:max-w-[200px] mx-auto w-full">
+                      <div className="max-w-[200px] sm:max-w-[220px] mx-auto w-full">
                         {frontItem ? (
                           <PromptItemView item={frontItem} alt={getCardTitle(previewCard, isSwapped)} compact />
                         ) : (
