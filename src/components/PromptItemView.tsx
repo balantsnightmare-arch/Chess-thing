@@ -40,7 +40,7 @@ export function PromptItemView({
     >
       <p
         className={`font-display font-extrabold text-slate-900 leading-tight break-words whitespace-pre-line overflow-y-auto max-h-full no-scrollbar ${
-          compact ? "text-sm" : "text-xl sm:text-2xl"
+          compact ? "text-lg sm:text-xl" : "text-2xl sm:text-3xl"
         }`}
       >
         {item.content}
@@ -84,7 +84,7 @@ export function PromptItemRow({
             />
           </div>
           <span
-            className={`text-[11px] italic flex items-center gap-1 ${
+            className={`text-xs italic flex items-center gap-1 ${
               dark ? "text-slate-500" : "text-slate-400"
             }`}
           >
@@ -101,7 +101,7 @@ export function PromptItemRow({
             <Type className={`w-4 h-4 ${dark ? "text-amber-400" : "text-amber-600"}`} />
           </div>
           <p
-            className={`flex-1 min-w-0 text-xs sm:text-sm font-semibold font-sans break-words ${
+            className={`flex-1 min-w-0 text-sm sm:text-base font-semibold font-sans break-words ${
               dark ? "text-slate-100" : "text-slate-800"
             }`}
           >

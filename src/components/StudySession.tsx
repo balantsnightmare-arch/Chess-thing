@@ -304,7 +304,11 @@ export default function StudySession({
                 </div>
 
                 {/* Front Body (Grid layout for the drawn prompt & question text) */}
-                <div className={`grid grid-cols-1 ${frontItem ? "md:grid-cols-2" : ""} gap-6 my-auto items-center`}>
+                <div
+                  /* Scrolls like the back does, so larger text on a narrow
+                     phone cannot push the prompt past the edge of the card. */
+                  className={`grid grid-cols-1 ${frontItem ? "md:grid-cols-2" : ""} gap-6 flex-1 min-h-0 overflow-y-auto no-scrollbar my-auto items-center py-2`}
+                >
                   {/* Randomly drawn prompt, when the card has any */}
                   {frontItem && (
                   <div className="w-full flex flex-col items-center gap-2">
@@ -348,7 +352,7 @@ export default function StudySession({
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                         {isSwapped ? "Recall the prompt" : "Question / Study Prompt"}
                       </div>
-                      <p className="text-slate-700 text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
+                      <p className="text-slate-700 text-lg sm:text-xl leading-relaxed whitespace-pre-line font-sans">
                         {isSwapped
                           ? "What was on the front of this card?"
                           : currentCard.frontText || "What is the answer?"}
@@ -419,7 +423,7 @@ export default function StudySession({
                       <h5 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                         <CheckCircle className="w-3.5 h-3.5" /> {backMainLabel}
                       </h5>
-                      <p className="text-slate-100 font-semibold text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
+                      <p className="text-slate-100 font-semibold text-lg sm:text-xl leading-relaxed whitespace-pre-line font-sans">
                         {backMainText}
                       </p>
                     </div>
@@ -431,7 +435,7 @@ export default function StudySession({
                       <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                         <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Notes
                       </h5>
-                      <p className="text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-sans">
+                      <p className="text-slate-300 text-sm sm:text-base leading-relaxed whitespace-pre-line font-sans">
                         {currentCard.additionalNotes}
                       </p>
                     </div>

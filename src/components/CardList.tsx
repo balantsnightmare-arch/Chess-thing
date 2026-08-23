@@ -526,7 +526,7 @@ export default function CardList({
                       {/* Prompt / Question (moves to the back when swapped) */}
                       {!isSwapped && previewCard.frontText && (
                         <div className="text-center bg-slate-50 border border-slate-100/80 rounded-xl p-3">
-                          <p className="text-slate-800 text-xs sm:text-sm font-medium font-sans whitespace-pre-line leading-relaxed">
+                          <p className="text-slate-800 text-base sm:text-lg font-medium font-sans whitespace-pre-line leading-relaxed">
                             {previewCard.frontText}
                           </p>
                         </div>
@@ -556,7 +556,7 @@ export default function CardList({
                       {/* Everything that was not drawn for the front */}
                       {backItems.length > 0 && (
                         <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
-                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1">
                             <Layers className="w-3 h-3 text-amber-400" /> {backLabel} ({backItems.length})
                           </span>
                           <div className="space-y-1.5">
@@ -570,10 +570,10 @@ export default function CardList({
                       {/* Answer, or the question when the sides are swapped */}
                       {backMainText && (
                         <div className="bg-amber-400/5 border border-amber-400/10 rounded-xl p-3">
-                          <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest block mb-1">
+                          <span className="text-[10px] text-amber-400 font-bold uppercase tracking-widest block mb-1">
                             {backMainLabel}
                           </span>
-                          <p className="text-slate-100 text-xs sm:text-sm font-semibold font-sans whitespace-pre-line leading-relaxed">
+                          <p className="text-slate-100 text-base sm:text-lg font-semibold font-sans whitespace-pre-line leading-relaxed">
                             {backMainText}
                           </p>
                         </div>
@@ -582,10 +582,10 @@ export default function CardList({
                       {/* Strategic Coach notes */}
                       {previewCard.additionalNotes && (
                         <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest block mb-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mb-1">
                             Notes
                           </span>
-                          <p className="text-slate-300 text-[11px] font-sans whitespace-pre-line leading-relaxed">
+                          <p className="text-slate-300 text-sm font-sans whitespace-pre-line leading-relaxed">
                             {previewCard.additionalNotes}
                           </p>
                         </div>
