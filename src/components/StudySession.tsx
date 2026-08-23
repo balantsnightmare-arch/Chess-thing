@@ -304,17 +304,12 @@ export default function StudySession({
                 </div>
 
                 {/* Front Body (Grid layout for the drawn prompt & question text) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-auto items-center">
-                  {/* Randomly drawn prompt: a picture or a phrase */}
+                <div className={`grid grid-cols-1 ${frontItem ? "md:grid-cols-2" : ""} gap-6 my-auto items-center`}>
+                  {/* Randomly drawn prompt, when the card has any */}
+                  {frontItem && (
                   <div className="w-full flex flex-col items-center gap-2">
                     <div className="w-full max-w-[280px] sm:max-w-[320px]">
-                      {frontItem ? (
-                        <PromptItemView item={frontItem} alt={getCardTitle(currentCard, isSwapped)} />
-                      ) : (
-                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-xs text-slate-400 text-center p-4">
-                          {isSwapped ? "This card has no answer to show." : "This card has no prompts yet."}
-                        </div>
-                      )}
+                      <PromptItemView item={frontItem} alt={getCardTitle(currentCard, isSwapped)} />
                     </div>
 
                     {!isSwapped && promptItems.length > 1 && (
@@ -337,6 +332,7 @@ export default function StudySession({
                       </div>
                     )}
                   </div>
+                  )}
 
                   {/* Question Prompt */}
                   <div className="space-y-4">

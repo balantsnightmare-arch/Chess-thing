@@ -492,15 +492,12 @@ export default function CardList({
 
                     {/* Front Body (randomly drawn prompt & question) */}
                     <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar my-auto space-y-3 py-2">
-                      <div className="max-w-[200px] sm:max-w-[220px] mx-auto w-full">
-                        {frontItem ? (
+                      {/* Prompts are optional, so a plain card shows only its question. */}
+                      {frontItem && (
+                        <div className="max-w-[200px] sm:max-w-[220px] mx-auto w-full">
                           <PromptItemView item={frontItem} alt={getCardTitle(previewCard, isSwapped)} compact />
-                        ) : (
-                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl aspect-square flex items-center justify-center text-[11px] text-slate-400 text-center p-4">
-                            {isSwapped ? "This card has no answer to show." : "This card has no prompts yet."}
-                          </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       {!isSwapped && previewItems.length > 1 && (
                         <div className="flex justify-center">
@@ -530,7 +527,11 @@ export default function CardList({
 
                     {/* Front Footer */}
                     <div className="text-center text-[10px] text-slate-400 border-t border-slate-50 pt-2 font-mono">
-                      {isSwapped ? "▲ Answer first • Flip for the prompt" : "▲ Drawn at random • Flip to see the rest"}
+                      {isSwapped
+                        ? "▲ Answer first • Flip for the prompt"
+                        : previewItems.length > 1
+                        ? "▲ Drawn at random • Flip to see the rest"
+                        : "▲ Flip to see the answer"}
                     </div>
                   </div>
 
