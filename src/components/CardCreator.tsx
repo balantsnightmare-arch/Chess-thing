@@ -35,7 +35,6 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
   // Front and back are the card. Everything below them is optional extra.
   const [frontText, setFrontText] = useState(cardToEdit?.frontText || "");
   const [backText, setBackText] = useState(cardToEdit?.backText || "");
-  const [title, setTitle] = useState(cardToEdit?.title || "");
 
   // Optional prompt items: pictures and phrases. One is drawn at random and
   // shown alongside the front; the rest are revealed on the back.
@@ -175,7 +174,6 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
 
       const data = await res.json();
 
-      if (data.title) setTitle(data.title);
       if (data.sideToPlay) {
         const side = data.sideToPlay;
         if (side === "White" || side === "Black" || side === "Unknown") {
@@ -237,7 +235,9 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
 
     const draft = {
       deckId,
-      title: title.trim(),
+      // No separate title any more; the front of the card is the heading.
+      // An existing card keeps whatever title it was already given.
+      title: cardToEdit?.title ?? "",
       // Kept in sync with the first image so list thumbnails and AI analysis work.
       imageUrl: imageItems.length > 0 ? imageItems[0].content : "",
       items: effectiveItems,
@@ -290,7 +290,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
         <div>
           <label className={`${labelClass} flex justify-between`}>
             <span>Card Front *</span>
-            <span className="text-[10px] text-slate-400 uppercase">The question</span>
+            <span className="text-[10px] text-slate-400 uppercase">Also the card&apos;s heading</span>
           </label>
           <textarea
             rows={3}
@@ -325,19 +325,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           <span className="h-px flex-1 bg-slate-100" />
         </div>
 
-        {/* ---------- 3. CARD TITLE ---------- */}
-        <div>
-          <label className={labelClass}>Card Title</label>
-          <input
-            type="text"
-            placeholder="e.g. Photosynthesis, or Spanish: to run"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className={fieldClass}
-          />
-        </div>
-
-        {/* ---------- 4. ADD WORD OR PHRASE ---------- */}
+        {/* ---------- ADD WORD OR PHRASE ---------- */}
         <div>
           <label className={labelClass}>Add a Word or Phrase</label>
           <div className="flex gap-2">
@@ -411,7 +399,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           )}
         </div>
 
-        {/* ---------- 5. ADD ANY IMAGES ---------- */}
+        {/* ---------- ADD ANY IMAGES ---------- */}
         <div>
           <label className={labelClass}>Add Any Images</label>
 
@@ -551,7 +539,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           )}
         </div>
 
-        {/* ---------- 6 & 7. SIDE TO PLAY / DIFFICULTY ---------- */}
+        {/* ---------- SIDE TO PLAY / DIFFICULTY ---------- */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Side to Play</label>

@@ -273,9 +273,12 @@ export default function CardList({
             const thumbnail = isSwapped ? "" : getPrimaryImage(card);
             const thumbnailText = isSwapped ? card.backText : getPrimaryText(card);
             const coverTitle = getCardTitle(card, isSwapped);
-            const coverText = isSwapped
-              ? card.backText
-              : card.frontText || getPrimaryText(card);
+            // The heading is the card front, so the line under it shows the
+            // next most useful thing that is not simply the heading again.
+            const coverText =
+              [isSwapped ? card.backText : card.frontText, getPrimaryText(card)].find(
+                (text) => text && text.trim() && text.trim() !== coverTitle.trim()
+              ) ?? "";
 
             return (
               <div
@@ -338,9 +341,11 @@ export default function CardList({
                     </button>
                   </div>
 
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                    {coverText || "Open this card to draw a prompt."}
-                  </p>
+                  {coverText && (
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {coverText}
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-1.5 items-center">
                     {/* Side to Move Badge */}
@@ -435,9 +440,12 @@ export default function CardList({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
                   Interactive Flashcard Preview
                 </span>
-                <h3 className="font-display font-extrabold text-xl text-slate-900 leading-tight pr-8">
-                  {getCardTitle(previewCard, isSwapped)}
-                </h3>
+                {getCardTitle(previewCard, isSwapped).trim() !==
+                  (isSwapped ? previewCard.backText : previewCard.frontText).trim() && (
+                  <h3 className="font-display font-extrabold text-xl text-slate-900 leading-tight pr-8">
+                    {getCardTitle(previewCard, isSwapped)}
+                  </h3>
+                )}
 
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   {previewCard.difficulty && (

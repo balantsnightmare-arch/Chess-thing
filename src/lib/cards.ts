@@ -45,7 +45,7 @@ export function getPrimaryImage(card: CardLike): string {
  * rendering an empty heading.
  */
 export function getCardTitle(
-  card: CardLike & { title?: string; backText?: string },
+  card: CardLike & { title?: string; frontText?: string; backText?: string },
   swapped = false
 ): string {
   // When the deck is swapped the answer is the front, so the heading has to
@@ -55,8 +55,13 @@ export function getCardTitle(
     const answer = (card.backText ?? "").trim();
     if (answer) return answer.length > 60 ? `${answer.slice(0, 57)}...` : answer;
   }
+  // Cards no longer carry a separate title: the front of the card is the
+  // title. An explicit title is still honoured so cards written before this
+  // keep the heading they were given.
   const title = (card.title ?? "").trim();
   if (title) return title;
+  const front = (card.frontText ?? "").trim();
+  if (front) return front.length > 60 ? `${front.slice(0, 57)}...` : front;
   const firstText = getPrimaryText(card).trim();
   if (firstText) return firstText.length > 60 ? `${firstText.slice(0, 57)}...` : firstText;
   return "Untitled card";

@@ -336,9 +336,13 @@ export default function StudySession({
 
                   {/* Question Prompt */}
                   <div className="space-y-4">
-                    <h4 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 leading-tight">
-                      {getCardTitle(currentCard, isSwapped)}
-                    </h4>
+                    {/* Only a heading distinct from the prompt earns its space. */}
+                    {getCardTitle(currentCard, isSwapped).trim() !==
+                      (isSwapped ? currentCard.backText : currentCard.frontText).trim() && (
+                      <h4 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 leading-tight">
+                        {getCardTitle(currentCard, isSwapped)}
+                      </h4>
+                    )}
 
                     <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-4 shadow-inner">
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
