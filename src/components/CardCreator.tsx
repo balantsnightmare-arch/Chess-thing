@@ -27,7 +27,7 @@ import {
 interface CardCreatorProps {
   deckId: string;
   cardToEdit?: ChessCard;
-  onSave: (card: Omit<ChessCard, "id" | "createdAt" | "reviewCount" | "lastReviewedAt" | "mastered">, isEditId?: string) => void;
+  onSave: (card: Omit<ChessCard, "id" | "createdAt" | "reviewCount" | "lastReviewedAt" | "mastered">, isEditId?: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -55,6 +55,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
   const [analysisError, setAnalysisError] = useState("");
   const [isDragActive, setIsDragActive] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -210,8 +211,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Saving to an account is a round trip. Without this the form sits there
+    // looking untouched, the button invites a second press, and each press
+    // mints a new card id, so one card is saved twice.
+    if (isSaving) return;
     setFormError("");
 
     if (!frontText.trim()) {
@@ -257,7 +262,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       return;
     }
 
-    onSave(draft, cardToEdit?.id);
+    setIsSaving(true);
+    try {
+      await onSave(draft, cardToEdit?.id);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const fieldClass =
@@ -631,18 +641,28 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold py-3 px-4 rounded-xl transition cursor-pointer"
+            disabled={isSaving}
+            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold py-3 px-4 rounded-xl transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
 
           <button
             type="submit"
-            disabled={isProcessingImages}
+            disabled={isProcessingImages || isSaving}
             className="flex-1 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-semibold py-3 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-slate-900/10 cursor-pointer disabled:cursor-not-allowed"
           >
-            <Save className="w-4 h-4" />
-            <span>Save Card</span>
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Save Card</span>
+              </>
+            )}
           </button>
         </div>
       </form>

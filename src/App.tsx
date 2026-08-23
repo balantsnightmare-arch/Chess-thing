@@ -123,6 +123,9 @@ export default function App() {
   const [swappedDecks, setSwappedDecks] = useState<Record<string, boolean>>(readSwappedDecks);
   // Consumed once, after decks load, so a deleted deck cannot strand the user.
   const pendingRestore = useRef<LastPlace | null>(readLastPlace());
+  // Belt and braces against a save being fired twice: a new card mints a fresh
+  // id each call, so two overlapping saves would store two cards.
+  const isSavingCard = useRef(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationDone, setMigrationDone] = useState<string | null>(null);
 
@@ -546,6 +549,19 @@ export default function App() {
 
   // Handlers for Cards
   const handleSaveCard = async (
+    cardDraft: Omit<ChessCard, "id" | "createdAt" | "reviewCount" | "lastReviewedAt" | "mastered">,
+    isEditId?: string
+  ) => {
+    if (isSavingCard.current) return;
+    isSavingCard.current = true;
+    try {
+      await saveCardDraft(cardDraft, isEditId);
+    } finally {
+      isSavingCard.current = false;
+    }
+  };
+
+  const saveCardDraft = async (
     cardDraft: Omit<ChessCard, "id" | "createdAt" | "reviewCount" | "lastReviewedAt" | "mastered">,
     isEditId?: string
   ) => {
