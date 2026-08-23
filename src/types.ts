@@ -25,6 +25,11 @@ export interface ChessCard {
   tacticalThemes: string[];
   frontText: string; // Prompt / Question
   backText: string;  // Answer / Solution
+  /**
+   * Concrete examples of whatever this card describes. Shown as their own
+   * study mode, where an example is drawn and you name the card it belongs to.
+   */
+  examples?: string[];
   additionalNotes: string;
   createdAt: number;
   reviewCount: number;

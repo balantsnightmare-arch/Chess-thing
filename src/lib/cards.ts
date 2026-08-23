@@ -67,6 +67,23 @@ export function getCardTitle(
   return "Untitled card";
 }
 
+/** The card's examples, ignoring blanks. */
+export function getCardExamples(card: { examples?: string[] }): string[] {
+  return (card.examples ?? []).filter(
+    (example) => typeof example === "string" && example.trim() !== ""
+  );
+}
+
+/** Fisher-Yates, so an example pool is walked without repeats. */
+export function shuffled<T>(list: T[]): T[] {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 /** First phrase on the card, used as a thumbnail stand-in for text-only cards. */
 export function getPrimaryText(card: CardLike): string {
   const firstText = getCardItems(card).find((item) => item.kind === "text");

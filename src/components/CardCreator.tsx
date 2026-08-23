@@ -4,6 +4,7 @@ import {
   createId,
   estimateCardBytes,
   formatBytes,
+  getCardExamples,
   getCardItems,
   processImageFile,
   MAX_CARD_BYTES,
@@ -22,6 +23,7 @@ import {
   Shuffle,
   Loader2,
   ImagePlus,
+  ListPlus,
 } from "lucide-react";
 
 interface CardCreatorProps {
@@ -42,6 +44,12 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
     cardToEdit ? getCardItems(cardToEdit) : []
   );
   const [phraseInput, setPhraseInput] = useState("");
+
+  // Concrete examples of the thing this card describes.
+  const [examples, setExamples] = useState<string[]>(() =>
+    cardToEdit ? getCardExamples(cardToEdit) : []
+  );
+  const [exampleInput, setExampleInput] = useState("");
 
   // "" means the field is left unset, so a card that does not need it shows nothing.
   const [sideToMove, setSideToMove] = useState<"" | "White" | "Black" | "Unknown">(cardToEdit?.sideToMove ?? "");
@@ -116,6 +124,28 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
     setItems((prev) => [...prev, { id: createId("item"), kind: "text", content: phrase }]);
     setPhraseInput("");
     setFormError("");
+  };
+
+  const handleAddExample = () => {
+    const example = exampleInput.trim();
+    if (!example) return;
+    setExamples((prev) => [...prev, example]);
+    setExampleInput("");
+    setFormError("");
+  };
+
+  const handleRemoveExample = (index: number) => {
+    setExamples((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveExample = (index: number, direction: -1 | 1) => {
+    setExamples((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -235,8 +265,13 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       ? [...items, { id: createId("item"), kind: "text", content: pendingPhrase }]
       : items;
 
+    const pendingExample = exampleInput.trim();
+    const effectiveExamples = pendingExample ? [...examples, pendingExample] : examples;
+
     setItems(effectiveItems);
     setPhraseInput("");
+    setExamples(effectiveExamples);
+    setExampleInput("");
 
     const draft = {
       deckId,
@@ -250,6 +285,7 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
       tacticalThemes: tags,
       frontText: frontText.trim(),
       backText: backText.trim(),
+      examples: effectiveExamples,
       additionalNotes: additionalNotes.trim(),
       difficulty: difficulty || undefined,
     };
@@ -324,6 +360,87 @@ export default function CardCreator({ deckId, cardToEdit, onSave, onCancel }: Ca
             onChange={(e) => setBackText(e.target.value)}
             className={`${fieldClass} resize-none`}
           />
+        </div>
+
+        {/* ---------- EXAMPLES (directly below the back) ---------- */}
+        <div>
+          <label className={`${labelClass} flex justify-between`}>
+            <span>Examples</span>
+            <span className="text-[10px] text-slate-400 uppercase">Optional</span>
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <ListPlus className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={exampleInput}
+                placeholder="An example of this card..."
+                onChange={(e) => setExampleInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddExample();
+                  }
+                }}
+                className={`${fieldClass} pl-9.5`}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAddExample}
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add</span>
+            </button>
+          </div>
+
+          {examples.length > 0 && (
+            <div className="mt-2 border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden">
+              {examples.map((example, index) => (
+                <div key={`${example}-${index}`} className="flex items-center gap-2 p-2 bg-white">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 w-4 shrink-0 text-center">
+                    {index + 1}
+                  </span>
+                  <p className="flex-1 min-w-0 text-sm text-slate-700 font-sans break-words">
+                    {example}
+                  </p>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveExample(index, -1)}
+                      disabled={index === 0}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title="Move up"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveExample(index, 1)}
+                      disabled={index === examples.length - 1}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      title="Move down"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveExample(index)}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      title="Remove example"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <span className="text-[10px] text-slate-400 font-sans mt-1 block">
+            Used by Study Examples: you are shown one example and name the card it belongs to.
+          </span>
         </div>
 
         {/* Everything past here can be left alone */}

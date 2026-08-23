@@ -39,6 +39,7 @@ import DeckManager from "./components/DeckManager";
 import CardList from "./components/CardList";
 import CardCreator from "./components/CardCreator";
 import StudySession from "./components/StudySession";
+import ExampleQuiz from "./components/ExampleQuiz";
 import AuthModal from "./components/AuthModal";
 import { createId } from "./lib/cards";
 import { Loader2, Sparkles, AlertTriangle, CloudUpload, Check } from "lucide-react";
@@ -111,7 +112,7 @@ export default function App() {
   const [decks, setDecks] = useState<ChessDeck[]>([]);
   const [cards, setCards] = useState<ChessCard[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"decks" | "deck-view" | "creator" | "study">("decks");
+  const [activeView, setActiveView] = useState<"decks" | "deck-view" | "creator" | "study" | "examples">("decks");
   const [editingCard, setEditingCard] = useState<ChessCard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -902,6 +903,7 @@ export default function App() {
                   setActiveView("creator");
                 }}
                 onStudy={() => setActiveView("study")}
+                onStudyExamples={() => setActiveView("examples")}
                 onDeleteCard={handleDeleteCard}
                 onToggleMastered={handleToggleMastered}
                 onEditCard={(card) => {
@@ -922,6 +924,14 @@ export default function App() {
                   setEditingCard(null);
                   setActiveView("deck-view");
                 }}
+              />
+            )}
+
+            {activeView === "examples" && selectedDeck && (
+              <ExampleQuiz
+                deck={selectedDeck}
+                cards={deckCards}
+                onClose={() => setActiveView("deck-view")}
               />
             )}
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ChessCard, ChessDeck } from "../types";
-import { getCardItems, getCardTitle, getPrimaryImage, getPrimaryText, makeTextItem, pickRandomIndex } from "../lib/cards";
+import { getCardExamples, getCardItems, getCardTitle, getPrimaryImage, getPrimaryText, makeTextItem, pickRandomIndex } from "../lib/cards";
 import { PromptItemRow, PromptItemView } from "./PromptItemView";
 import {
   Plus,
@@ -18,7 +18,8 @@ import {
   Type,
   ChevronLeft,
   ChevronRight,
-  ArrowLeftRight
+  ArrowLeftRight,
+  ListChecks
 } from "lucide-react";
 
 interface CardListProps {
@@ -27,6 +28,7 @@ interface CardListProps {
   onBack: () => void;
   onAddCard: () => void;
   onStudy: () => void;
+  onStudyExamples: () => void;
   onDeleteCard: (cardId: string) => void;
   onToggleMastered: (cardId: string) => void;
   onEditCard: (card: ChessCard) => void;
@@ -41,6 +43,7 @@ export default function CardList({
   onBack,
   onAddCard,
   onStudy,
+  onStudyExamples,
   onDeleteCard,
   onToggleMastered,
   onEditCard,
@@ -123,6 +126,7 @@ export default function CardList({
   });
 
   const masteredCount = cards.filter((c) => c.mastered).length;
+  const exampleCount = cards.reduce((total, card) => total + getCardExamples(card).length, 0);
 
   // Step through the deck without closing the preview.
   const previewIndex = previewCardId
@@ -220,6 +224,20 @@ export default function CardList({
           >
             <ArrowLeftRight className="w-4 h-4" />
             <span>{isSwapped ? "Sides Swapped" : "Swap Sides"}</span>
+          </button>
+
+          <button
+            onClick={onStudyExamples}
+            disabled={exampleCount === 0}
+            className="bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 text-slate-800 disabled:text-slate-300 text-xs sm:text-sm font-semibold py-2.5 px-4 rounded-xl transition flex items-center space-x-1.5 border border-slate-200/60 cursor-pointer disabled:cursor-not-allowed"
+            title={
+              exampleCount === 0
+                ? "Add examples to a card to use this"
+                : `Draw one of this deck's ${exampleCount} examples and name its card`
+            }
+          >
+            <ListChecks className="w-4 h-4" />
+            <span>Study Examples{exampleCount > 0 ? ` (${exampleCount})` : ""}</span>
           </button>
 
           <button
