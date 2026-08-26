@@ -42,6 +42,7 @@ import StudySession from "./components/StudySession";
 import ExampleQuiz from "./components/ExampleQuiz";
 import AuthModal from "./components/AuthModal";
 import { createId } from "./lib/cards";
+import type { ScannedCard } from "./components/ScanSheet";
 import { Loader2, Sparkles, AlertTriangle, CloudUpload, Check } from "lucide-react";
 
 const LOCAL_USER_KEY = "chess_local_user";
@@ -532,6 +533,59 @@ export default function App() {
     await loadData(user); // Reload stats and lists
   };
 
+  /**
+   * Build a deck straight from a photographed page. Only front and back are
+   * filled in; every other field on a card is left at its default.
+   */
+  const handleCreateDeckFromScan = async (deckName: string, scanned: ScannedCard[]) => {
+    const newDeck: ChessDeck = {
+      id: createId("deck"),
+      name: deckName,
+      description: `Created from a photo on ${new Date().toLocaleDateString()}.`,
+      createdAt: Date.now(),
+    };
+
+    const ok = await runWrite(async () => {
+      if (user && !user.isLocal) {
+        await saveDeckToFirestore(newDeck, user.uid);
+      } else {
+        await saveDeck(newDeck, localOwnerFor(user));
+      }
+
+      let created = 0;
+      for (const entry of scanned) {
+        const card: ChessCard = {
+          id: createId("card"),
+          deckId: newDeck.id,
+          title: "",
+          imageUrl: "",
+          items: [],
+          tacticalThemes: [],
+          frontText: entry.front,
+          backText: entry.back,
+          additionalNotes: "",
+          examples: [],
+          createdAt: Date.now() + created,
+          reviewCount: 0,
+          lastReviewedAt: null,
+          mastered: false,
+        };
+        created += 1;
+        if (user && !user.isLocal) {
+          await saveCardToFirestore(card, user.uid);
+        } else {
+          await saveCard(card, localOwnerFor(user));
+        }
+      }
+    }, "Could not create the deck from that photo. Please try again.");
+
+    await loadData(user);
+    if (ok) {
+      setSelectedDeckId(newDeck.id);
+      setActiveView("deck-view");
+    }
+  };
+
   const handleDeleteDeck = async (deckId: string) => {
     await runWrite(async () => {
       if (user && !user.isLocal) {
@@ -890,6 +944,7 @@ export default function App() {
                 onCreateDeck={handleCreateDeck}
                 onDeleteDeck={handleDeleteDeck}
                 onImportData={handleImportData}
+                onCreateDeckFromScan={handleCreateDeckFromScan}
               />
             )}
 

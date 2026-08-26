@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ChessDeck, ChessCard } from "../types";
+import ScanSheet, { ScannedCard } from "./ScanSheet";
 import { 
   FolderPlus, 
   Trash2, 
@@ -9,7 +10,8 @@ import {
   Upload, 
   Layers,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Camera
 } from "lucide-react";
 
 interface DeckManagerProps {
@@ -19,6 +21,7 @@ interface DeckManagerProps {
   onCreateDeck: (name: string, description: string) => void;
   onDeleteDeck: (deckId: string) => void;
   onImportData: (jsonData: string) => void;
+  onCreateDeckFromScan: (deckName: string, cards: ScannedCard[]) => Promise<void>;
 }
 
 export default function DeckManager({
@@ -28,11 +31,13 @@ export default function DeckManager({
   onCreateDeck,
   onDeleteDeck,
   onImportData,
+  onCreateDeckFromScan,
 }: DeckManagerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
   const [newDeckDesc, setNewDeckDesc] = useState("");
+  const [isScanOpen, setIsScanOpen] = useState(false);
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState(false);
 
@@ -134,6 +139,15 @@ export default function DeckManager({
               <span>Create New Deck</span>
             </button>
             
+            <button
+              onClick={() => setIsScanOpen(true)}
+              className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center space-x-2 cursor-pointer"
+              title="Photograph a page of notes and turn it into a deck"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Scan a Sheet</span>
+            </button>
+
             <button
               onClick={handleExport}
               className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center space-x-2 cursor-pointer"
@@ -282,6 +296,16 @@ export default function DeckManager({
           <h4 className="font-display font-bold text-slate-800">No decks found</h4>
           <p className="text-sm text-slate-400 mt-1">Try tweaking your search query or create a new deck.</p>
         </div>
+      )}
+
+      {isScanOpen && (
+        <ScanSheet
+          onClose={() => setIsScanOpen(false)}
+          onCreate={async (name, cards) => {
+            await onCreateDeckFromScan(name, cards);
+            setIsScanOpen(false);
+          }}
+        />
       )}
 
       {/* Create Deck Modal */}

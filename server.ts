@@ -148,6 +148,139 @@ Format your output STRICTLY as a JSON object with the exact properties:
     }
   });
 
+  /*
+   * Turn a photographed sheet of notes into flashcards.
+   *
+   * The model id is not hardcoded to a single string: a wrong or retired id
+   * fails the whole feature, so a short list is tried in order and the first
+   * that answers is used. GEMINI_MODEL overrides the list entirely.
+   */
+  const SCAN_MODELS = process.env.GEMINI_MODEL
+    ? [process.env.GEMINI_MODEL]
+    : ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+
+  app.post("/api/scan-sheet", async (req, res) => {
+    try {
+      const { image } = req.body;
+      if (!image) {
+        return res.status(400).json({ error: "No image data provided" });
+      }
+
+      if (!ai) {
+        return res.status(503).json({
+          error:
+            "Reading a photo needs a Gemini API key. Set GEMINI_API_KEY on the server and try again.",
+        });
+      }
+
+      let mimeType = "image/png";
+      let base64Data = image;
+      if (image.startsWith("data:")) {
+        const parts = image.split(";base64,");
+        if (parts.length === 2) {
+          mimeType = parts[0].replace("data:", "");
+          base64Data = parts[1];
+        }
+      }
+
+      const promptText = `You are reading a photograph of a page of study notes.
+
+Extract the material and turn it into flashcards. Each flashcard has exactly two
+fields: a front (the prompt, term, or question) and a back (the answer,
+definition, or explanation). Use the wording on the page; do not invent facts
+that are not there.
+
+Rules:
+- Produce one card per distinct idea, term, question or definition on the page.
+- If the page is a list of term/definition pairs, each pair is one card.
+- If the page is prose, write a sensible question for the front and the
+  supporting detail for the back.
+- Skip page numbers, headers, decorations and anything unreadable.
+- Keep each field short: a phrase or a couple of sentences.
+- Suggest a short deck name describing the page's subject.
+
+Return STRICTLY this JSON shape and nothing else:
+{
+  "deckName": "Short subject name",
+  "cards": [ { "front": "...", "back": "..." } ]
+}`;
+
+      let responseText: string | undefined;
+      let lastError: unknown = null;
+      for (const model of SCAN_MODELS) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [
+              { inlineData: { data: base64Data, mimeType } },
+              { text: promptText },
+            ],
+            config: { responseMimeType: "application/json" },
+          });
+          responseText = response.text;
+          if (responseText) break;
+        } catch (err) {
+          lastError = err;
+          console.warn(`Sheet scan failed on model ${model}:`, (err as Error)?.message);
+        }
+      }
+
+      if (!responseText) {
+        console.error("Sheet scan: no model produced a response.", lastError);
+        return res.status(502).json({
+          error:
+            "Could not reach the image model. Check the server's Gemini API key and model access.",
+        });
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(responseText.trim());
+      } catch {
+        const match = responseText.match(/\{[\s\S]*\}/);
+        if (!match) {
+          return res.status(502).json({ error: "The model did not return usable JSON." });
+        }
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          return res.status(502).json({ error: "The model did not return usable JSON." });
+        }
+      }
+
+      // Only front and back are taken; everything else on a card is left alone.
+      const cards = Array.isArray(parsed?.cards)
+        ? parsed.cards
+            .map((card: any) => ({
+              front: typeof card?.front === "string" ? card.front.trim() : "",
+              back: typeof card?.back === "string" ? card.back.trim() : "",
+            }))
+            .filter((card: any) => card.front && card.back)
+        : [];
+
+      if (cards.length === 0) {
+        return res.status(422).json({
+          error:
+            "Nothing readable was found on that photo. Try again with the page filling the frame in good light.",
+        });
+      }
+
+      return res.json({
+        deckName:
+          typeof parsed?.deckName === "string" && parsed.deckName.trim()
+            ? parsed.deckName.trim()
+            : "Scanned Notes",
+        cards,
+      });
+    } catch (err: any) {
+      console.error("Sheet scan failed:", err);
+      return res.status(500).json({
+        error: "Could not read that photo. Please try again.",
+        details: err?.message,
+      });
+    }
+  });
+
   // Serve static files and handle routing based on environment
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

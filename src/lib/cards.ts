@@ -115,12 +115,16 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function downscaleDataUrl(dataUrl: string): Promise<string> {
+function downscaleDataUrl(
+  dataUrl: string,
+  maxDimension = MAX_IMAGE_DIMENSION,
+  quality = 0.85
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const longestEdge = Math.max(img.width, img.height);
-      const scale = longestEdge > 0 ? Math.min(1, MAX_IMAGE_DIMENSION / longestEdge) : 1;
+      const scale = longestEdge > 0 ? Math.min(1, maxDimension / longestEdge) : 1;
       if (scale === 1 && dataUrl.length <= SKIP_RECOMPRESS_BYTES) {
         resolve(dataUrl);
         return;
@@ -139,12 +143,28 @@ function downscaleDataUrl(dataUrl: string): Promise<string> {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      const encoded = canvas.toDataURL("image/jpeg", 0.85);
+      const encoded = canvas.toDataURL("image/jpeg", quality);
       resolve(encoded.length < dataUrl.length ? encoded : dataUrl);
     };
     img.onerror = () => reject(new Error("That image file could not be decoded."));
     img.src = dataUrl;
   });
+}
+
+/**
+ * A photographed sheet is read for its text, so it keeps far more detail than a
+ * card picture does. 900px turns body text into mush.
+ */
+export const MAX_SCAN_DIMENSION = 1600;
+
+export async function processScanImage(file: File): Promise<string> {
+  const dataUrl = await readFileAsDataUrl(file);
+  if (file.type === "image/svg+xml") return dataUrl;
+  try {
+    return await downscaleDataUrl(dataUrl, MAX_SCAN_DIMENSION, 0.92);
+  } catch {
+    return dataUrl;
+  }
 }
 
 /**
